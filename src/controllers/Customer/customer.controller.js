@@ -21,7 +21,6 @@ export const createCustomer = asyncHandler(async (req, res) => {
 });
 
 
-
 export const updateCustomer = asyncHandler(async (req, res) => {
   const { activlineUserId } = req.params;
 
@@ -130,32 +129,43 @@ export const updateCustomerReferralCode = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Access denied");
   }
 
-  const { userName, referralCode, message } = req.body;
+  const { userName, referralCode, getRewards, giveRewards } = req.body;
 
-  const customer = await Customer.findOne({ userName });
+  // ✅ Find customer by userName OR referralCode
+  let customer;
+  if (userName) {
+    customer = await Customer.findOne({ userName });
+  } else if (referralCode) {
+    customer = await Customer.findOne({ "referral.code": referralCode });
+  }
 
   if (!customer) {
     throw new ApiError(404, "Customer not found");
   }
 
-  // ❌ Block referral code editing
-  if (referralCode) {
-    throw new ApiError(403, "Referral code is auto-generated and cannot be edited");
+  // ✅ Allow rewards editing (GLOBAL UPDATE)
+  const updates = {};
+  if (getRewards !== undefined) {
+    updates["referral.getRewards"] = getRewards;
+    customer.referral.getRewards = getRewards; // Update local for response
+  }
+  if (giveRewards !== undefined) {
+    updates["referral.giveRewards"] = giveRewards;
+    customer.referral.giveRewards = giveRewards; // Update local for response
   }
 
-  // ✅ Allow message editing
-  if (message !== undefined) {
-    customer.referral.message = message;
+  if (Object.keys(updates).length > 0) {
+    await Customer.updateMany({}, { $set: updates });
   }
-
-  await customer.save();
 
   res.json({
     success: true,
-    message: "Referral message updated successfully",
+    message: "Referral rewards updated for all customers",
     data: {
-      userName,
-      message
+      userName: customer.userName,
+      referralCode: customer.referral.code,
+      getRewards: customer.referral.getRewards,
+      giveRewards: customer.referral.giveRewards,
     }
   });
 });
@@ -195,10 +205,9 @@ export const getMyReferralCode = asyncHandler(async (req, res) => {
     success: true,
     data: {
       referralCode: customer.referral?.code || null,
-      message:
-        customer.referral?.message ||
-        "Invite your friends to ActivLine. They get $500 off, and you get 1 Month FREE!"
-    }
+      getRewards: customer.referral?.getRewards,
+      giveRewards: customer.referral?.giveRewards,
+    },
   });
 });
 

@@ -241,10 +241,15 @@ const customerSchema = new mongoose.Schema(
     default: 0,
     min: 0,
   },
-  message: {        // ✅ ADDED FIELD
+  getRewards: {
     type: String,
-    default: null,
     trim: true,
+    default: "1 Month FREE",
+  },
+  giveRewards: {
+    type: String,
+    trim: true,
+    default: "$500 off",
   },
 },
 
@@ -289,8 +294,7 @@ customerSchema.pre("save", async function () {
 
     this.referral = {
       code: `${firstName}${paddedNumber}`,
-      referredCount: 0,
-      message: null
+      referredCount: 0
     };
   }
 
