@@ -1,8 +1,24 @@
 import activlineClient from "../../external/activline/activline.client.js";
 import FormData from "form-data";
-
+import { findById } from "../../repositories/Customer/customer.repository.js";
 
 import activlineFormClient from "../../external/activline/activline.client.js";
+
+/**
+ * Get customer profile from database
+ */
+export const getCustomerProfile = async (userId) => {
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  const customer = await findById(userId);
+  if (!customer) {
+    throw new Error("Customer not found");
+  }
+
+  return customer;
+};
 
 /**
  * Get full user details from Activline

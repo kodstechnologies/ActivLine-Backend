@@ -13,6 +13,10 @@ export const findByIdentifier = (identifier) => {
   });
 };
 
+export const findById = (id) => {
+  return Customer.findById(id);
+};
+
 export const createCustomerRepo = async (data) => {
   const customer = await Customer.create(data);
   return customer;

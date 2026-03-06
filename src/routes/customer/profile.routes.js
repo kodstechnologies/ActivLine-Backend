@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { fetchUserFullDetails } from "../../controllers/Customer/customerprofile.controller.js";
+import { 
+  fetchUserFullDetails, 
+  getProfile 
+} from "../../controllers/Customer/customerprofile.controller.js";
 import {
   editUserProfile,
   verifyOtpAndUpdate,
@@ -8,6 +11,11 @@ import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 
 const router = Router();
+
+/**
+ * GET /api/customer/profile/
+ */
+router.get("/", verifyJWT, allowRoles("CUSTOMER"), getProfile);
 
 /**
  * GET /api/customer/profile/user/:user_id

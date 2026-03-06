@@ -4,7 +4,7 @@ import ApiError from "../../utils/ApiError.js";
 import { loginUser } from "../../services/auth/login.service.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
-export const login = asyncHandler(async (req, res) => {
+export const    login = asyncHandler(async (req, res) => {
   let { email, password, fcmToken, deviceId } = req.body;
 
   if (!email || !password) {
