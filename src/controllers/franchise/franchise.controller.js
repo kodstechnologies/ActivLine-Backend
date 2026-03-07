@@ -1,16 +1,29 @@
-import { getFranchiseAccounts } from "../../services/franchise/franchise.service.js";
+import { getFranchiseAccounts,syncFranchiseData  } from "../../services/franchise/franchise.service.js";
 
-export const fetchFranchiseAccounts = async (req, res, next) => {
+
+
+
+
+export const fetchFranchiseAccounts = async (req, res) => {
+
   try {
-    const { accountId } = req.params;
 
-    const data = await getFranchiseAccounts(accountId);
+    const data = await syncFranchiseData();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data,
+      message: "Franchise list fetched successfully",
+      data: data,
     });
-  } catch (err) {
-    next(err);
+
+  } catch (error) {
+
+    console.error("Franchise API error:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+
   }
 };

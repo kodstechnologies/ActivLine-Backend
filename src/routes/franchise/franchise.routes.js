@@ -17,6 +17,8 @@ router.get("/sub-plans/:groupId", fetchSubPlans);
 // 🔹 Franchise APIs
 router.get("/", fetchFranchiseAccounts);
 router.get("/:accountId", fetchFranchiseAccounts);
+router.get("/", fetchFranchiseAccounts);
+
 
 // 🔹 Franchise → Admin API (FORM-DATA SUPPORT)
 
