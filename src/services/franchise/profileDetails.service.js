@@ -1,9 +1,8 @@
 import axios from "axios";
 import Franchise from "../../models/Franchise/franchise.model.js";
 
-export const fetchProfilesByFranchise = async (accountId) => {
+export const fetchProfileDetails = async (accountId, profileId) => {
 
-  // get franchise from DB
   const franchise = await Franchise.findOne({ accountId });
 
   if (!franchise) {
@@ -18,7 +17,7 @@ export const fetchProfilesByFranchise = async (accountId) => {
     .toString("base64");
 
   const response = await axios.get(
-    "https://live.activline.in/api/v1/get_all_profile_ids",
+    `https://live.activline.in/api/v1/get_profile_details/${profileId}`,
     {
       headers: {
         Authorization: `Basic ${basicAuth}`,
@@ -28,4 +27,5 @@ export const fetchProfilesByFranchise = async (accountId) => {
   );
 
   return response.data;
+
 };

@@ -4,6 +4,7 @@ import { fetchAllAdmins } from "../../controllers/franchise/f.admin.controller.j
 import { fetchSubPlans } from "../../controllers/franchise/subPlan.controller.js";
 import { upload } from "../../utils/multerConfig.js"; // adjust path if needed
 import { getProfiles } from "../../controllers/franchise/profile.controller.js";
+import { getProfileDetails } from "../../controllers/franchise/profileDetails.controller.js";
 const router = Router();
 
 
@@ -21,6 +22,7 @@ router.get("/", fetchFranchiseAccounts);
 router.get("/:accountId/profiles", getProfiles);
 
 
+router.get("/:accountId/profile-details/:profileId", getProfileDetails);
 // 🔹 Franchise → Admin API (FORM-DATA SUPPORT)
 
 
