@@ -31,6 +31,9 @@ const franchiseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Franchise = mongoose.model("Franchise", franchiseSchema);
+// 🔥 FIX
+const Franchise =
+  mongoose.models.Franchise ||
+  mongoose.model("Franchise", franchiseSchema);
 
 export default Franchise;
