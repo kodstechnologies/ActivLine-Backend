@@ -119,7 +119,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
 
   if (
     ["IN_PROGRESS", "RESOLVED", "CLOSED"].includes(newStatus) &&
-    !["ADMIN", "SUPER_ADMIN", "ADMIN_STAFF"].includes(userRole)
+    !["ADMIN", "SUPER_ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"].includes(userRole)
   ) {
     throw new ApiError(403, "You are not allowed to update ticket status");
   }
@@ -214,6 +214,7 @@ export const canUserSendMessage = async ({
   roomId,
   senderRole,
   senderId,
+  accountId,
 }) => {
   const room = await ChatRoomRepo.findById(roomId);
 
@@ -228,11 +229,33 @@ export const canUserSendMessage = async ({
 
   // ✅ Customer always allowed
   if (senderRole === "CUSTOMER") {
+    const roomCustomerId =
+      typeof room.customer === "object" && room.customer?._id
+        ? room.customer._id.toString()
+        : room.customer?.toString();
+    if (roomCustomerId !== senderId.toString()) {
+      throw new ApiError(403, "You cannot send message in this chat");
+    }
+    return room;
+  }
+
+  // ✅ Franchise admin only for own franchise customer rooms
+  if (senderRole === "FRANCHISE_ADMIN") {
+    if (!accountId) {
+      throw new ApiError(403, "You cannot send message in this chat");
+    }
+    if (!room.customer || room.customer.accountId !== accountId) {
+      throw new ApiError(403, "You cannot send message in this chat");
+    }
     return room;
   }
 
   // ✅ Admin & Staff always allowed (NO assignedStaff check)
-  if (senderRole === "ADMIN" || senderRole === "SUPER_ADMIN" || senderRole === "ADMIN_STAFF") {
+  if (
+    senderRole === "ADMIN" ||
+    senderRole === "SUPER_ADMIN" ||
+    senderRole === "ADMIN_STAFF"
+  ) {
     return room;
   }
 

@@ -5,6 +5,8 @@ import {
   updateFranchiseAdmin,
   deleteFranchiseAdmin
 } from "../../controllers/franchise/adminCredential.controller.js";
+import { verifyJWT } from "../../middlewares/auth.middleware.js";
+import { allowRoles } from "../../middlewares/role.middleware.js";
 
 import multer from "multer";
 
@@ -17,7 +19,12 @@ router.post(
   upload.single("profileImage"),
   createFranchiseAdmin
 );
-router.get("/", getFranchiseAdmins);
+router.get(
+  "/",
+  verifyJWT,
+  allowRoles("FRANCHISE_ADMIN", "ADMIN", "SUPER_ADMIN"),
+  getFranchiseAdmins
+);
 router.put("/:id", upload.single("profileImage"), updateFranchiseAdmin);
 router.delete("/:id", deleteFranchiseAdmin);
 

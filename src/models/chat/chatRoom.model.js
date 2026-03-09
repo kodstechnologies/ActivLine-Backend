@@ -16,6 +16,12 @@ const chatRoomSchema = new mongoose.Schema(
       default: null,
     },
 
+    assignedFranchiseAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "FranchiseAdmin",
+      default: null,
+    },
+
     createdByAdmin: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin",

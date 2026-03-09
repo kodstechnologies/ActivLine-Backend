@@ -54,11 +54,25 @@ export const createFranchiseAdmin = asyncHandler(async (req, res) => {
 export const getFranchiseAdmins = async (req, res) => {
   try {
 
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, search = "", accountId } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
 
     const query = {};
+
+    // Franchise admin can only view admins from own franchise
+    if (req.user?.role === "FRANCHISE_ADMIN") {
+      if (!req.user.accountId) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+      query.accountId = req.user.accountId;
+    } else if (accountId) {
+      // Super admin / admin can filter by accountId
+      query.accountId = accountId;
+    }
 
     if (search) {
       query.$or = [
@@ -68,6 +82,7 @@ export const getFranchiseAdmins = async (req, res) => {
     }
 
     const admins = await FranchiseAdmin.find(query)
+      .select("-refreshToken")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit));

@@ -5,6 +5,7 @@ import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import ChatMessage from "../../models/chat/chatMessage.model.js";
 import { getIO } from "../../socket/index.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
+import * as ChatService from "../../services/chat/chat.service.js";
 
 export const uploadChatFiles = asyncHandler(async (req, res) => {
   // 1️⃣ Handle Multipart Upload (Promisified)
@@ -26,6 +27,13 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
   if (!room) {
     return res.status(404).json(ApiResponse.error("Chat room not found"));
   }
+
+  await ChatService.canUserSendMessage({
+    roomId,
+    senderRole: req.user.role,
+    senderId: req.user._id,
+    accountId: req.user.accountId,
+  });
 
   const attachments = [];
 

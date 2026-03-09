@@ -106,7 +106,7 @@ const chatMessageSchema = new mongoose.Schema(
 
     senderRole: {
       type: String,
-      enum: ["CUSTOMER", "ADMIN", "ADMIN_STAFF", "SUPER_ADMIN"],
+      enum: ["CUSTOMER", "ADMIN", "ADMIN_STAFF", "SUPER_ADMIN", "FRANCHISE_ADMIN"],
       required: true,
     },
 
