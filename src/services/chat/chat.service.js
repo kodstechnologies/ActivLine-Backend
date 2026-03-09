@@ -8,6 +8,8 @@ import { createActivityLog } from "../ActivityLog/activityLog.service.js";
 import ApiError from "../../utils/ApiError.js";
 import crypto from "crypto";
 import { notifyCustomer } from "../Notification/customer.notification.service.js";
+import CustomerNotification from "../../models/Notification/customernotification.model.js";
+import Notification from "../../models/Notification/notification.model.js";
 /**
  * ===============================
  * ADMIN → FETCH ALL ROOMS
@@ -124,6 +126,29 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     throw new ApiError(403, "You are not allowed to update ticket status");
   }
 
+  // 🔐 FRANCHISE ADMIN CHECK: Can only manage own franchise tickets
+  if (userRole === "FRANCHISE_ADMIN") {
+    if (!room.customer || room.customer.accountId !== req.user.accountId) {
+      throw new ApiError(403, "Access denied: You can only manage tickets for your franchise");
+    }
+  }
+
+  // CLOSE => delete room + full chat history + room-linked notifications
+  if (newStatus === "CLOSED") {
+    await Promise.all([
+      ChatMessage.deleteMany({ roomId }),
+      ChatRoom.deleteOne({ _id: roomId }),
+      CustomerNotification.deleteMany({ "data.roomId": roomId }),
+      Notification.deleteMany({ "data.roomId": roomId }),
+    ]);
+
+    return {
+      _id: roomId,
+      status: "CLOSED",
+      deleted: true,
+    };
+  }
+
   const updatedRoom = await ChatRoomRepo.updateStatus(roomId, newStatus);
 
   // 🔍 Find the first message sent by the customer
@@ -151,17 +176,13 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
   });
 
   // ✅ 🔔 NOTIFY CUSTOMER
-  if (["RESOLVED", "CLOSED"].includes(newStatus)) {
+  if (newStatus === "RESOLVED") {
     await notifyCustomer({
       customerId: room.customer._id, // IMPORTANT
       type: "TICKET",
-      roomId,
-        title: firstCustomerMsg?.message || "",
-      message:
-        newStatus === "RESOLVED"
-          ? "✅ Your issue has been resolved"
-          : "📌 Your ticket has been closed",
-      
+      data: { roomId },
+      title: firstCustomerMsg?.message || "",
+      message: "✅ Your issue has been resolved",
     });
   }
 

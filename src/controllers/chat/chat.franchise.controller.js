@@ -16,12 +16,22 @@ const toPositiveInt = (value, fallback) => {
   return Number.isNaN(parsed) || parsed <= 0 ? fallback : parsed;
 };
 
+const resolveScopedAccountId = (req, source = {}) => {
+  if (req.user?.role === "FRANCHISE_ADMIN") {
+    return req.user.accountId || null;
+  }
+  if (req.user?.role === "ADMIN" || req.user?.role === "SUPER_ADMIN") {
+    return source.accountId || null;
+  }
+  return null;
+};
+
 export const createFranchiseChatRoom = asyncHandler(async (req, res) => {
   const { customerId, message } = req.body || {};
-  const accountId = req.user?.accountId;
+  const accountId = resolveScopedAccountId(req, req.body || {});
 
   if (!accountId) {
-    throw new ApiError(403, "Access denied");
+    throw new ApiError(400, "accountId is required");
   }
 
   if (!customerId) {
@@ -70,9 +80,9 @@ export const createFranchiseChatRoom = asyncHandler(async (req, res) => {
 });
 
 export const getFranchiseChatRooms = asyncHandler(async (req, res) => {
-  const accountId = req.user?.accountId;
+  const accountId = resolveScopedAccountId(req, req.query || {});
   if (!accountId) {
-    throw new ApiError(403, "Access denied");
+    throw new ApiError(400, "accountId is required");
   }
 
   const page = toPositiveInt(req.query.page, 1);
@@ -227,18 +237,14 @@ export const getFranchiseChatRooms = asyncHandler(async (req, res) => {
 
 export const getFranchiseRoomMessages = asyncHandler(async (req, res) => {
   const { roomId } = req.params;
-  const accountId = req.user?.accountId;
-
-  if (!accountId) {
-    throw new ApiError(403, "Access denied");
-  }
+  const accountId = resolveScopedAccountId(req, req.query || {});
 
   const room = await ChatRoom.findById(roomId).populate("customer", "accountId");
   if (!room) {
     throw new ApiError(404, "Chat room not found");
   }
 
-  if (!room.customer || room.customer.accountId !== accountId) {
+  if (accountId && (!room.customer || room.customer.accountId !== accountId)) {
     throw new ApiError(403, "Access denied");
   }
 
@@ -279,13 +285,9 @@ export const getFranchiseRoomMessages = asyncHandler(async (req, res) => {
 export const updateFranchiseRoomStatus = asyncHandler(async (req, res) => {
   const { roomId } = req.params;
   const { status } = req.body || {};
-  const accountId = req.user?.accountId;
+  const accountId = resolveScopedAccountId(req, req.body || {});
 
-  if (!accountId) {
-    throw new ApiError(403, "Access denied");
-  }
-
-  const normalizedStatus = String(status || "").toUpperCase();
+  const normalizedStatus = String(status || "").trim().toUpperCase();
   if (!ALLOWED_STATUSES.includes(normalizedStatus)) {
     throw new ApiError(400, "Invalid status");
   }
@@ -295,7 +297,7 @@ export const updateFranchiseRoomStatus = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Chat room not found");
   }
 
-  if (!room.customer || room.customer.accountId !== accountId) {
+  if (accountId && (!room.customer || room.customer.accountId !== accountId)) {
     throw new ApiError(403, "Access denied");
   }
 
@@ -304,7 +306,9 @@ export const updateFranchiseRoomStatus = asyncHandler(async (req, res) => {
   return res.json(
     ApiResponse.success(
       updatedRoom,
-      `Ticket status updated to ${normalizedStatus}`
+      updatedRoom.deleted
+        ? "Ticket closed and full chat history deleted"
+        : `Ticket status updated to ${normalizedStatus}`
     )
   );
 });

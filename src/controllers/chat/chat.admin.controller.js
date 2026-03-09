@@ -73,14 +73,18 @@ await createActivityLog({
   req,
   action: "UPDATE",
   module: "TICKET",
-  description: `Ticket status changed to ${req.body.status}`,
+  description: updatedRoom.deleted
+    ? "Ticket closed and deleted"
+    : `Ticket status changed to ${req.body.status}`,
   targetId: updatedRoom._id,
 });
 
   res.json(
     ApiResponse.success(
       updatedRoom,
-      `Ticket status updated to ${req.body.status}`
+      updatedRoom.deleted
+        ? "Ticket closed and full chat history deleted"
+        : `Ticket status updated to ${req.body.status}`
     )
   );
 });
