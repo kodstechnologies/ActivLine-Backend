@@ -1,5 +1,5 @@
 import express from "express";
-import { createCustomer, updateCustomer,getMyProfile } from "../../controllers/Customer/customer.controller.js";
+import { createCustomer, updateCustomer,getMyProfile, updateOwnFranchiseCustomer, deleteOwnFranchiseCustomer } from "../../controllers/Customer/customer.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { createCustomerSchema } from "../../validations/Customer/customer.validation.js";
@@ -34,6 +34,24 @@ router.post(
     { name: "addressFile", maxCount: 1 },
   ]),
   updateCustomer
+);
+
+router.patch(
+  "/customers/:customerId/franchise-edit",
+  verifyJWT,
+  allowRoles("FRANCHISE_ADMIN"),
+  upload.fields([
+    { name: "idFile", maxCount: 1 },
+    { name: "addressFile", maxCount: 1 },
+  ]),
+  updateOwnFranchiseCustomer
+);
+
+router.delete(
+  "/customers/:customerId/franchise-delete",
+  verifyJWT,
+  allowRoles("FRANCHISE_ADMIN"),
+  deleteOwnFranchiseCustomer
 );
 
 

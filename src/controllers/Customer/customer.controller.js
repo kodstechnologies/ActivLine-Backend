@@ -3,12 +3,19 @@
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import Customer from "../../models/Customer/customer.model.js";
+import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 // import { loginCustomerSchema } from "../../validations/Customer/customer.validation.js";
 import { createCustomerService ,updateCustomerService,getMyProfileService,getProfileImageService,
   updateProfileImageService,
   deleteProfileImageService,} from "../../services/Customer/customer.service.js";
 import ApiError from "../../utils/ApiError.js";
+import ChatRoom from "../../models/chat/chatRoom.model.js";
+import ChatMessage from "../../models/chat/chatMessage.model.js";
+import CustomerSession from "../../models/Customer/customerLogin.model.js";
+import CustomerNotification from "../../models/Notification/customernotification.model.js";
+import Session from "../../models/Customer/session.model.js";
+import OtpVerification from "../../models/Customer/otp.model.js";
 export const createCustomer = asyncHandler(async (req, res) => {
   const logBody = { ...req.body };
   if (logBody.password) logBody.password = "*****"; // 🔒 Mask password in logs
@@ -40,6 +47,103 @@ export const updateCustomer = asyncHandler(async (req, res) => {
     success: true,
     message: "Customer updated successfully",
     data: result,
+  });
+});
+
+export const updateOwnFranchiseCustomer = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+  const franchiseAccountId = req.user?.accountId;
+
+  if (!franchiseAccountId) {
+    throw new ApiError(403, "Access denied");
+  }
+
+  const customer = await Customer.findOne({
+    _id: customerId,
+    accountId: franchiseAccountId,
+  }).select("activlineUserId");
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found in your franchise");
+  }
+
+  const payload = { ...req.body };
+  delete payload.accountId;
+
+  const result = await updateCustomerService(
+    customer.activlineUserId,
+    payload,
+    req.files
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Customer updated successfully",
+    data: result,
+  });
+});
+
+export const deleteOwnFranchiseCustomer = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+  const franchiseAccountId = req.user?.accountId;
+
+  if (!franchiseAccountId) {
+    throw new ApiError(403, "Access denied");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new ApiError(400, "Invalid customer id");
+  }
+
+  const customer = await Customer.findOne({
+    _id: customerId,
+    accountId: franchiseAccountId,
+  }).select("_id accountId activlineUserId");
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found in your franchise");
+  }
+
+  const roomIds = await ChatRoom.find({ customer: customer._id }).distinct("_id");
+
+  const messageFilters = [{ senderId: customer._id, senderModel: "Customer" }];
+  if (roomIds.length > 0) {
+    messageFilters.push({ roomId: { $in: roomIds } });
+  }
+
+  const [messages, rooms, customerNotifications, customerSessions, sessions, otps, deletedCustomer] =
+    await Promise.all([
+      ChatMessage.deleteMany({ $or: messageFilters }),
+      ChatRoom.deleteMany({ customer: customer._id }),
+      CustomerNotification.deleteMany({ customerId: customer._id }),
+      CustomerSession.deleteMany({ customerId: customer._id }),
+      Session.deleteMany({
+        activlineUserId: customer.activlineUserId,
+        accountId: customer.accountId,
+      }),
+      OtpVerification.deleteMany({
+        userId: {
+          $in: [String(customer._id), customer.activlineUserId].filter(Boolean),
+        },
+      }),
+      Customer.deleteOne({ _id: customer._id }),
+    ]);
+
+  res.status(200).json({
+    success: true,
+    message: "Customer and related data deleted successfully",
+    data: {
+      customerId: String(customer._id),
+      deletedCounts: {
+        customer: deletedCustomer.deletedCount || 0,
+        chatMessages: messages.deletedCount || 0,
+        chatRooms: rooms.deletedCount || 0,
+        customerNotifications: customerNotifications.deletedCount || 0,
+        customerSessions: customerSessions.deletedCount || 0,
+        activlineSessions: sessions.deletedCount || 0,
+        otpRecords: otps.deletedCount || 0,
+      },
+    },
   });
 });
 
