@@ -82,14 +82,19 @@ router.delete(
 router.get(
   "/customers",
   verifyJWT,
-  allowRoles("SUPER_ADMIN", "ADMIN", "ADMIN_STAFF"),
+  allowRoles("SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
   getAllCustomers
 );
-router.get("/customers/:accountId", getCustomersByFranchise);
+router.get(
+  "/customers/:accountId",
+  verifyJWT,
+  allowRoles("SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
+  getCustomersByFranchise
+);
 router.get(
   "/customers/:customerId",
   verifyJWT,
-  allowRoles("SUPER_ADMIN", "ADMIN", "ADMIN_STAFF"),
+  allowRoles("SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
   getSingleCustomer
 );
 

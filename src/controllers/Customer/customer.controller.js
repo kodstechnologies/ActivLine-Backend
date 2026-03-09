@@ -268,6 +268,14 @@ export const getAllCustomers = asyncHandler(async (req, res) => {
   // ✅ Build dynamic query
   const query = {};
 
+  // Restrict franchise admin to their own account only
+  if (req.user?.role === "FRANCHISE_ADMIN") {
+    if (!req.user.accountId) {
+      throw new ApiError(403, "Access denied");
+    }
+    query.accountId = req.user.accountId;
+  }
+
   // 🔎 Search logic
   if (search) {
     query.$or = [
@@ -329,6 +337,13 @@ export const getCustomersByFranchise = asyncHandler(async (req, res) => {
     accountId
   };
 
+  // Restrict franchise admin to their own account only
+  if (req.user?.role === "FRANCHISE_ADMIN") {
+    if (!req.user.accountId || req.user.accountId !== accountId) {
+      throw new ApiError(403, "Access denied");
+    }
+  }
+
   // 🔎 Search filter
   if (search) {
     query.$or = [
@@ -377,8 +392,12 @@ export const getCustomersByFranchise = asyncHandler(async (req, res) => {
 export const getSingleCustomer = asyncHandler(async (req, res) => {
   const { customerId } = req.params;
 
-  const customer = await Customer.findById(customerId)
-    .select("-password"); // 🔐 hide password
+  const customerQuery =
+    req.user?.role === "FRANCHISE_ADMIN"
+      ? { _id: customerId, accountId: req.user.accountId }
+      : { _id: customerId };
+
+  const customer = await Customer.findOne(customerQuery).select("-password"); // 🔐 hide password
 
   if (!customer) {
     throw new ApiError(404, "Customer not found");

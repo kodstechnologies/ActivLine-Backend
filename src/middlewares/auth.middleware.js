@@ -39,6 +39,7 @@ export const verifyJWT = asyncHandler(async (req, _res, next) => {
   _id: decoded._id || decoded.id,
   role: (decoded.role || decoded.type || "CUSTOMER").toUpperCase(),
   email: decoded.email || null,
+  accountId: decoded.accountId || null,
 };
 
 
