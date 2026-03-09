@@ -1,23 +1,34 @@
-
 import ApiError from "../../utils/ApiError.js";
 import Admin from "../../models/auth/auth.model.js";
+import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 import StaffStatus from "../../models/staff/Staff.model.js";
 
 export const loginUser = async ({
   email,
   password,
   fcmToken,
-  deviceId, // 👈 NEW (very important)
+  deviceId,
 }) => {
-  const user = await Admin.findOne({ email }).select("+password");
+
+  // 1️⃣ Try Admin / Staff login
+  let user = await Admin.findOne({ email }).select("+password");
+  let isFranchise = false;
+
+  // 2️⃣ If not found → try Franchise Admin
+  if (!user) {
+    user = await FranchiseAdmin.findOne({ email }).select("+password");
+    isFranchise = true;
+  }
+
   if (!user) throw new ApiError(401, "Invalid credentials");
 
   // 🔐 PASSWORD CHECK
   const isMatch = await user.comparePassword(password);
   if (!isMatch) throw new ApiError(401, "Invalid credentials");
 
-  // 🔐 STAFF STATUS CHECK
-  if (user.role === "ADMIN_STAFF") {
+  // 3️⃣ STAFF STATUS CHECK (only for admin staff)
+  if (!isFranchise && user.role === "ADMIN_STAFF") {
+
     const staffStatus = await StaffStatus.findOne({ staffId: user._id });
 
     if (!staffStatus) {
@@ -32,7 +43,6 @@ export const loginUser = async ({
       throw new ApiError(403, "Your account is inactive. Ask admin to activate.");
     }
 
-    // ✅ LOGIN SUCCESS → SET ACTIVE
     await StaffStatus.updateOne(
       { staffId: user._id },
       { status: "ACTIVE" }
@@ -40,14 +50,21 @@ export const loginUser = async ({
   }
 
   // 🔑 TOKEN GENERATION
-  const accessToken = user.generateAccessToken();
-  const refreshToken = user.generateRefreshToken();
+  const accessToken = user.generateAccessToken
+    ? user.generateAccessToken()
+    : null;
 
-  user.refreshToken = refreshToken;
+  const refreshToken = user.generateRefreshToken
+    ? user.generateRefreshToken()
+    : null;
 
-  // 🔔 FCM TOKEN HANDLING (MULTI-DEVICE)
+  if (!isFranchise) {
+    user.refreshToken = refreshToken;
+  }
+
+  // 🔔 FCM TOKEN HANDLING
   if (fcmToken && deviceId) {
-    // ✅ Safety: Ensure array exists
+
     if (!user.fcmTokens) user.fcmTokens = [];
 
     const existingDevice = user.fcmTokens.find(
@@ -55,11 +72,9 @@ export const loginUser = async ({
     );
 
     if (existingDevice) {
-      // 🔁 Same device → update token & timestamp
       existingDevice.token = fcmToken;
       existingDevice.lastUsedAt = new Date();
     } else {
-      // ➕ New device
       user.fcmTokens.push({
         token: fcmToken,
         deviceId,
@@ -76,7 +91,7 @@ export const loginUser = async ({
       name: user.name,
       email: user.email,
       role: user.role,
-      fcmTokens: user.fcmTokens,
+      fcmTokens: user.fcmTokens || [],
     },
     currentFcmToken: fcmToken,
     accessToken,
