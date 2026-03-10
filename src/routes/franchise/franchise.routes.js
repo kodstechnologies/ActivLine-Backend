@@ -21,6 +21,7 @@ router.get("/", fetchFranchiseAccounts);
 router.get("/:accountId", fetchFranchiseAccounts);
 router.get("/", fetchFranchiseAccounts);
 router.get("/:accountId/profiles", getProfiles);
+router.get("/:accountId/profiles/:profileId", getProfiles);
 
 
 router.get("/:accountId/profile-details/:profileId", getProfileDetails);
