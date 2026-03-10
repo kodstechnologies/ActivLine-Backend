@@ -26,7 +26,7 @@ export const    login = asyncHandler(async (req, res) => {
     user: result.user,
     action: "LOGIN",
     module: "AUTH",
-    description: `${result.user.role} ${result.user.name} logged in successfully`,
+    description: `${result.user.role} ${result.user.name} logged in successfully from account ${result.user.accountId}`,
   });
 
   const options = {

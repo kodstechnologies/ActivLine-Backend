@@ -83,14 +83,20 @@ export const loginUser = async ({
 
   await user.save({ validateBeforeSave: false });
 
+  const userObject = {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    fcmTokens: user.fcmTokens || [],
+  };
+
+  if (isFranchise) {
+    userObject.accountId = user.accountId;
+  }
+
   return {
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      fcmTokens: user.fcmTokens || [],
-    },
+    user: userObject,
     currentFcmToken: fcmToken,
     accessToken,
     refreshToken,

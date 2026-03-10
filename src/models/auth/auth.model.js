@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 const adminSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
+  accountId: { type: String },
   // phone: { type: String, unique: true, sparse: true },
   password: { type: String, required: true },
  role: {
@@ -37,7 +38,7 @@ adminSchema.methods.comparePassword = function (password) {
 
 adminSchema.methods.generateAccessToken = function () {
   return jwt.sign(
-    { _id: this._id, role: this.role, email: this.email },
+    { _id: this._id, role: this.role, email: this.email, accountId: this.accountId },
 
     process.env.ACCESS_TOKEN_SECRET,
     { expiresIn: "7d" }

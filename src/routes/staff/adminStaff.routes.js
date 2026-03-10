@@ -7,11 +7,13 @@ import {
 } from "../../controllers/staff/adminStaff.manage.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { canManageAdminStaff } from "../../middlewares/auth.middleware.js";
+import { allowRolesExceptCustomer } from "../../middlewares/role.middleware.js";
 
 const router = Router();
 router.get(
   "/",
   verifyJWT,
+  allowRolesExceptCustomer,
   getAllAdminStaff
 );
 
@@ -20,6 +22,7 @@ router.get(
 router.get(
   "/:id",
   verifyJWT,
+  allowRolesExceptCustomer,
   getSingleAdminStaff
 );
 // ✏️ UPDATE ADMIN STAFF

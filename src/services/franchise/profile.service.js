@@ -41,7 +41,19 @@ export const fetchProfilesByFranchise = async (accountId, options = {}) => {
     }
   );
 
-  const list = Array.isArray(response?.data?.data) ? response.data.data : [];
+  const payload = response?.data;
+  const listCandidate =
+    (Array.isArray(payload?.data) && payload.data) ||
+    (Array.isArray(payload?.Data) && payload.Data) ||
+    (Array.isArray(payload?.profiles) && payload.profiles) ||
+    (Array.isArray(payload?.Profiles) && payload.Profiles) ||
+    (Array.isArray(payload?.result) && payload.result) ||
+    (Array.isArray(payload?.results) && payload.results) ||
+    (Array.isArray(payload) && payload) ||
+    (Array.isArray(response?.data?.data) && response.data.data) ||
+    [];
+
+  const list = listCandidate;
   const normalizedList = list.map((entry) => {
     const profile = normalizeProfileEntry(entry);
     return { Profile: profile };

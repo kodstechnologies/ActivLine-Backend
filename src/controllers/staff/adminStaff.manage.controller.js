@@ -5,10 +5,20 @@ import * as StaffService from "../../services/staff/adminStaff.manage.service.js
 
 
 export const getAllAdminStaff = asyncHandler(async (req, res) => {
-  const staffList = await StaffService.getAllAdminStaff();
+  const result = await StaffService.getAllAdminStaff(req.query || {});
+
+  if (result.isSingle) {
+    return res.json(
+      ApiResponse.success(result.data, "Admin staff fetched successfully")
+    );
+  }
 
   return res.json(
-    ApiResponse.success(staffList, "Admin staff list fetched successfully")
+    ApiResponse.success(
+      result.data,
+      "Admin staff list fetched successfully",
+      result.meta
+    )
   );
 });
 
