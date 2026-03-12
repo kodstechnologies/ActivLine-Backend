@@ -1,4 +1,5 @@
 import ChatRoom from "../../../models/chat/chatRoom.model.js";
+import PaymentHistory from "../../../models/payment/paymentHistory.model.js";
 
 /* OPEN TICKETS */
 export const countOpenTickets = () =>
@@ -38,6 +39,30 @@ export const getRecentTickets = (limit = 5) =>
     .populate("customer", "fullName email")
     .sort({ updatedAt: -1 })
     .limit(limit);
+
+/* RECENT PAYMENTS */
+export const getRecentPayments = (limit = 5) =>
+  PaymentHistory.find(
+    {},
+    {
+      groupId: 1,
+      accountId: 1,
+      profileId: 1,
+      planName: 1,
+      planAmount: 1,
+      currency: 1,
+      status: 1,
+      razorpayOrderId: 1,
+      razorpayPaymentId: 1,
+      paidAt: 1,
+      planDetails: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+  )
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
 
 
    export const countRoomsAssignedToStaff = () =>

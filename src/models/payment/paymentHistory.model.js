@@ -74,6 +74,7 @@ const paymentHistorySchema = new mongoose.Schema(
 paymentHistorySchema.index({ groupId: 1, createdAt: -1 });
 paymentHistorySchema.index({ groupId: 1, planName: 1 });
 paymentHistorySchema.index({ accountId: 1, createdAt: -1 });
+paymentHistorySchema.index({ createdAt: -1 });
 
 const PaymentHistory =
   mongoose.models.PaymentHistory ||

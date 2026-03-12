@@ -19,6 +19,9 @@ export const getTotalCustomers = async () => ({
 export const getRecentTickets = async (limit) =>
   Repo.getRecentTickets(limit);
 
+export const getRecentPayments = async (limit) =>
+  Repo.getRecentPayments(limit);
+
 
 
 export const getAssignedRoomsCount = async () => {

@@ -42,6 +42,37 @@ export const getRecentTickets = asyncHandler(async (req, res) => {
   res.json(ApiResponse.success(mapped, "Recent tickets fetched"));
 });
 
+/* RECENT PAYMENTS */
+export const getRecentPayments = asyncHandler(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
+  const payments = await DashboardService.getRecentPayments(limit);
+
+  const mapped = payments.map((item) => ({
+    paymentId: String(item._id),
+    orderId: item.razorpayOrderId,
+    razorpayPaymentId: item.razorpayPaymentId,
+    status: item.status,
+    isPaid: item.status === "SUCCESS",
+    amount: item.planAmount,
+    currency: item.currency,
+    groupId: item.groupId,
+    accountId: item.accountId,
+    profileId: item.profileId,
+    planName: item.planName,
+    paidAt: item.paidAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    plan: {
+      profileId: item.profileId,
+      planName: item.planName,
+      planAmount: item.planAmount,
+      details: item.planDetails || {},
+    },
+  }));
+
+  res.json(ApiResponse.success(mapped, "Recent payments fetched"));
+});
+
 export const getAssignedRoomsCount = asyncHandler(async (req, res) => {
   const data = await DashboardService.getAssignedRoomsCount();
 
