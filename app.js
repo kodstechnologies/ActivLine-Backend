@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import routes from "./src/routes/index.route.js";
+import paymentRoutes from "./src/routes/payment/index.js";
 import ApiError from "./src/utils/ApiError.js";
 import cookieParser from "cookie-parser";
 import path from "path";
@@ -71,6 +72,7 @@ app.use(
   "/uploads/chat",
   express.static(path.join(process.cwd(), "uploads/chat"))
 );
+app.use("/", paymentRoutes);
 app.use("/api", routes);
 
 // Test Route

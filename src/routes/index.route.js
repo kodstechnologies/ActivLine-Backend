@@ -9,6 +9,7 @@ import staffIndex from "./staff/index.js";
 import notificationRoutes from "./Notification/notification.routes.js";
 import dashboardRoutes from "./admin/Dashboard/dashboard.routes.js"; 
 import locationRoutes from "./customer/location.routes.js";
+import paymentRoutes from "./payment/index.js";
 
 import logsIndex from "./ActivityLog/index.js";// ✅ ADD THIS
 // import staffNotificationRoutes from "./Notification/staffnotification.routes.js";
@@ -23,6 +24,7 @@ router.use("/customer", customerIndex);
 router.use("/staff", staffIndex); 
 router.use("/dashboard", dashboardRoutes);
 router.use("/location", locationRoutes);
+router.use("/payment", paymentRoutes);
 router.use("/notifications", notificationRoutes); 
 // router.use("/", staffNotificationRoutes);
 router.use("/logs", logsIndex); 
