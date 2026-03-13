@@ -5,9 +5,9 @@ export const createCustomerSchema = Joi.object({
 
   accountId: Joi.string().required(),
 
-  userName: Joi.string().min(3).required(),
+  userName: Joi.string().min(3).optional().allow(""),
 
-  password: Joi.string().min(6).optional(),
+  password: Joi.string().min(6).optional().allow(""),
 
   phoneNumber: Joi.string()
     .pattern(/^[6-9]\d{9}$/)

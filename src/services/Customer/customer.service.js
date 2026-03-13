@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import Session from "../../models/Customer/session.model.js";
 import {
@@ -73,32 +74,69 @@ export const getMessagesByRoom = async (roomId) => {
 
 export const createCustomerService = async (payload, files) => {
   const uploadedFilePaths = [];
+  const generateRandomUserName = async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const randomNumber = crypto.randomInt(0, 1000000);
+      const candidate = `AL-${String(randomNumber).padStart(6, "0")}`;
+      const exists = await Customer.exists({ userName: candidate });
+      if (!exists) return candidate;
+    }
+    throw new ApiError(500, "Unable to generate unique username");
+  };
+
+  const pickChar = (chars) => chars[crypto.randomInt(0, chars.length)];
+  const generateStrongPassword = (firstName, length = 12) => {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const digits = "0123456789";
+    const special = "!@#$%^&*";
+    const all = upper + lower + digits + special;
+
+    const safeName = String(firstName || "")
+      .replace(/[^a-zA-Z]/g, "")
+      .slice(0, 3);
+    const namePart = safeName
+      ? safeName.charAt(0).toUpperCase() + safeName.slice(1).toLowerCase()
+      : "";
+
+    const passwordChars = [
+      pickChar(upper),
+      pickChar(lower),
+      pickChar(digits),
+      pickChar(special),
+    ];
+
+    for (let i = passwordChars.length; i < length; i += 1) {
+      passwordChars.push(pickChar(all));
+    }
+
+    for (let i = passwordChars.length - 1; i > 0; i -= 1) {
+      const j = crypto.randomInt(0, i + 1);
+      [passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]];
+    }
+
+    const randomPart = passwordChars.join("");
+    return namePart ? `${namePart}${randomPart}` : randomPart;
+  };
   // 🔹 1. Determine Username (Use provided or generate)
   let finalUserName = payload.userName;
+  let finalPassword = payload.password;
 
   if (!finalUserName) {
-    let nextUserNumber = 1;
-    // Find the last customer to determine the next user number
-    const lastCustomer = await Customer.findOne({}, { userName: 1 })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (lastCustomer && lastCustomer.userName && lastCustomer.userName.startsWith("AL-")) {
-      const lastNumberStr = lastCustomer.userName.split("-")[1];
-      if (lastNumberStr) {
-        const lastNumber = parseInt(lastNumberStr, 10);
-        if (!isNaN(lastNumber)) {
-          nextUserNumber = lastNumber + 1;
-        }
-      }
-    }
-    finalUserName = `AL-${String(nextUserNumber).padStart(6, "0")}`;
+    finalUserName = await generateRandomUserName();
   }
+
+  if (!finalPassword) {
+    finalPassword = generateStrongPassword(payload.firstName);
+  }
+
+  const generatedUserName = !payload.userName;
+  const generatedPassword = !payload.password;
 
   const formData = new FormData();
 
   // Use the determined username for Activline and local DB
-  Object.entries({ ...payload, userName: finalUserName }).forEach(([key, value]) => {
+  Object.entries({ ...payload, userName: finalUserName, password: finalPassword }).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       formData.append(key, value);
     }
@@ -181,7 +219,7 @@ const savedCustomer = await createCustomerRepo({ // The pre-save hook will gener
   userName: finalUserName, // Use determined username
   phoneNumber: payload.phoneNumber,
   emailId: payload.emailId,
-  password: payload.password, // will hash if schema has pre-save hook
+  password: finalPassword, // will hash if schema has pre-save hook
   userState: payload.userState,
   userType: payload.userType,
   activationDate: payload.activationDate,
@@ -288,7 +326,17 @@ const savedCustomer = await createCustomerRepo({ // The pre-save hook will gener
     }
   });
 
-  return savedCustomer;
+  return {
+    customer: savedCustomer,
+    credentials: {
+      userName: finalUserName,
+      password: finalPassword,
+    },
+    generated: {
+      userName: generatedUserName,
+      password: generatedPassword,
+    },
+  };
 };
 
 const buildCustomerUpdateData = (payload) => {

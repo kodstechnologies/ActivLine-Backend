@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
 import Customer from "../../models/Customer/customer.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
+import { createCustomerSchema } from "../../validations/Customer/customer.validation.js";
+import { createCustomerService } from "../../services/customer/customer.service.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import ApiResponse from "../../utils/ApiReponse.js";
+import { sendCustomerWelcomeEmail } from "../../utils/mail.util.js";
 
 /**
  * @description Get all customers with filtering, searching, and pagination
@@ -114,4 +117,50 @@ export const getCustomerById = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(ApiResponse.success(customer, "Customer details fetched successfully"));
+});
+
+/**
+ * @description Create a new customer
+ * @route POST /api/customer/create
+ * @access Public (or Admin if protected by route middleware)
+ */
+export const createCustomer = asyncHandler(async (req, res) => {
+  const { error, value } = createCustomerSchema.validate(req.body, {
+    abortEarly: false,
+    stripUnknown: true,
+  });
+
+  if (error) {
+    throw new ApiError(
+      400,
+      error.details.map((detail) => detail.message).join(", ")
+    );
+  }
+
+  const result = await createCustomerService(value, req.files);
+
+  const customerData = result.customer?.toObject
+    ? result.customer.toObject()
+    : result.customer;
+
+  if (customerData?.password) {
+    delete customerData.password;
+  }
+
+  if (value.emailId) {
+    await sendCustomerWelcomeEmail({
+      to: value.emailId,
+      userName: result.credentials.userName,
+      password: result.credentials.password,
+      phoneNumber: value.phoneNumber,
+      emailId: value.emailId,
+    });
+  }
+
+  return res.status(201).json(
+    ApiResponse.success(
+      null,
+      "Account created successfully"
+    )
+  );
 });
