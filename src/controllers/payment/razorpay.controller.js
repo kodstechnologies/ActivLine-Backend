@@ -4,6 +4,7 @@ import {
   verifyRazorpaySignature,
 } from "../../services/payment/razorpay.service.js";
 import { getProfileDetails } from "../../external/activline/activline.profile.api.js";
+import { getGroupDetails } from "../../services/franchise/groupDetails.service.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 import Customer from "../../models/Customer/customer.model.js";
 
@@ -20,6 +21,14 @@ const AMOUNT_KEYS = [
 
 const GROUP_ID_KEYS = ["groupId", "groupID", "group_id", "userGroupId"];
 const ACCOUNT_ID_KEYS = ["accountId", "accountID", "account_id", "account"];
+const PROFILE_ID_KEYS = [
+  "profileId",
+  "profileID",
+  "profile_id",
+  "Profile_id",
+  "Profile Id",
+  "activlineUserId",
+];
 
 const extractAmount = (value) => {
   if (!value || typeof value !== "object") return null;
@@ -107,15 +116,77 @@ const getBillingMeta = (planDetails = {}) => {
   };
 };
 
+const extractAllTextByKeys = (value, keys, bag = new Set()) => {
+  if (!value || typeof value !== "object") return bag;
+
+  const normalizedTargetKeys = keys.map((k) =>
+    String(k).toLowerCase().replace(/[^a-z0-9]/g, "")
+  );
+
+  for (const key of keys) {
+    if (value[key] !== undefined && value[key] !== null) {
+      const asString = String(value[key]).trim();
+      if (asString) bag.add(asString);
+    }
+  }
+
+  if (
+    value.property !== undefined &&
+    value.value !== undefined &&
+    value.value !== null
+  ) {
+    const normalizedProperty = String(value.property)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+
+    if (normalizedTargetKeys.includes(normalizedProperty)) {
+      const asString = String(value.value).trim();
+      if (asString) bag.add(asString);
+    }
+  }
+
+  for (const child of Object.values(value)) {
+    if (child && typeof child === "object") {
+      extractAllTextByKeys(child, keys, bag);
+    }
+  }
+
+  return bag;
+};
+
 const normalizeText = (value) => {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
   return text || null;
 };
 
+const extractRowsFromGroupDetails = (payload) => {
+  if (!payload) return [];
+
+  const candidateRoots = [
+    payload?.data?.data,
+    payload?.data,
+    payload?.message?.data,
+    payload?.message,
+    payload,
+  ];
+
+  for (const candidate of candidateRoots) {
+    if (Array.isArray(candidate)) return candidate;
+    if (candidate && typeof candidate === "object") {
+      for (const value of Object.values(candidate)) {
+        if (Array.isArray(value)) return value;
+      }
+    }
+  }
+
+  return [];
+};
+
 const toCustomerSnapshot = (customer) => {
   if (!customer) {
     return {
+      accountId: null,
       name: null,
       phoneNumber: null,
       email: null,
@@ -125,6 +196,7 @@ const toCustomerSnapshot = (customer) => {
   const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
 
   return {
+    accountId: customer.accountId || null,
     name: customer.userName || fullName || null,
     phoneNumber: customer.phoneNumber || null,
     email: customer.emailId || null,
@@ -196,6 +268,12 @@ const buildCustomerResolver = async (paymentDocs) => {
 const mapPaymentHistoryDoc = (doc, customer) => {
   const obj = doc.toObject();
   const billingMeta = getBillingMeta(obj.planDetails || {});
+  const resolvedAccountId =
+    normalizeText(obj.accountId) || normalizeText(customer?.accountId) || null;
+  const resolvedCustomer = {
+    ...(customer || toCustomerSnapshot(null)),
+    accountId: resolvedAccountId,
+  };
 
   return {
     paymentId: String(doc._id),
@@ -206,13 +284,13 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     amount: obj.planAmount,
     currency: obj.currency,
     groupId: obj.groupId,
-    accountId: obj.accountId,
+    accountId: resolvedAccountId,
     profileId: obj.profileId,
     planName: obj.planName,
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
-    customer,
+    customer: resolvedCustomer,
     plan: {
       profileId: obj.profileId,
       planName: obj.planName,
@@ -339,20 +417,39 @@ export const createPlanOrder = async (req, res, next) => {
           "Plan amount not found in profile details. Pass amount in body for this plan.",
       });
     }
+    const finalAccountId = normalizeText(req.body?.accountId);
+    const finalGroupId = normalizeText(req.body?.groupId);
 
-    const groupIdFromBody = req.body?.groupId;
-    const accountIdFromBody = req.body?.accountId;
-    const accountIdFromPlan = extractTextByKeys(profilePayload, ACCOUNT_ID_KEYS);
-    const groupIdFromPlan = extractTextByKeys(profilePayload, GROUP_ID_KEYS);
+    if (!finalAccountId || !finalGroupId) {
+      return res.status(400).json({
+        success: false,
+        message: "accountId and groupId are required in request body",
+      });
+    }
 
-    const preliminaryGroupId = String(groupIdFromBody || groupIdFromPlan || profileId);
-
-    const finalAccountId =
-      accountIdFromBody || accountIdFromPlan || preliminaryGroupId;
-
-    const finalGroupId = String(
-      groupIdFromBody || groupIdFromPlan || finalAccountId || profileId
+    const groupDetailsRes = await getGroupDetails(finalAccountId);
+    const groupRows = extractRowsFromGroupDetails(groupDetailsRes);
+    const normalizedProfileId = normalizeText(profileId);
+    const hasProfileIdInRows = groupRows.some((row) =>
+      normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS))
     );
+
+    const hasValidMapping = groupRows.some((row) => {
+      const rowGroupId = normalizeText(extractTextByKeys(row, GROUP_ID_KEYS));
+      const rowProfileId = normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS));
+
+      if (rowGroupId !== finalGroupId) return false;
+      if (!hasProfileIdInRows) return true;
+      return rowProfileId === normalizedProfileId;
+    });
+
+    if (!hasValidMapping) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid accountId/groupId/profileId combination. Please pass values from franchise group-details.",
+      });
+    }
 
     const order = await createRazorpayOrder({
       amount: finalAmount,
@@ -406,6 +503,9 @@ export const verifyPlanPayment = async (req, res, next) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
       req.body || {};
+    const accountIdFromBody = normalizeText(req.body?.accountId);
+    const groupIdFromBody = normalizeText(req.body?.groupId);
+    const profileIdFromBody = normalizeText(req.body?.profileId);
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
@@ -421,11 +521,30 @@ export const verifyPlanPayment = async (req, res, next) => {
       razorpay_signature,
     });
 
+    const existingPayment = await PaymentHistory.findOne({
+      razorpayOrderId: razorpay_order_id,
+    })
+      .select("accountId groupId profileId")
+      .lean();
+
+    const resolvedAccountId =
+      normalizeText(existingPayment?.accountId) || accountIdFromBody || null;
+    const resolvedGroupId =
+      normalizeText(existingPayment?.groupId) || groupIdFromBody || null;
+    const resolvedProfileId =
+      normalizeText(existingPayment?.profileId) || profileIdFromBody || null;
+
+    const identityPatch = {};
+    if (resolvedAccountId) identityPatch.accountId = resolvedAccountId;
+    if (resolvedGroupId) identityPatch.groupId = resolvedGroupId;
+    if (resolvedProfileId) identityPatch.profileId = resolvedProfileId;
+
     if (!isValid) {
       await PaymentHistory.findOneAndUpdate(
         { razorpayOrderId: razorpay_order_id },
         {
           $set: {
+            ...identityPatch,
             status: "FAILED",
             razorpayPaymentId: String(razorpay_payment_id),
             razorpaySignature: String(razorpay_signature),
@@ -443,6 +562,7 @@ export const verifyPlanPayment = async (req, res, next) => {
       { razorpayOrderId: razorpay_order_id },
       {
         $set: {
+          ...identityPatch,
           status: "SUCCESS",
           razorpayPaymentId: String(razorpay_payment_id),
           razorpaySignature: String(razorpay_signature),
@@ -452,11 +572,16 @@ export const verifyPlanPayment = async (req, res, next) => {
       { new: true }
     );
 
+    const resolveCustomer = updated ? await buildCustomerResolver([updated]) : null;
+    const responseData = updated
+      ? mapPaymentHistoryDoc(updated, resolveCustomer(updated))
+      : null;
+
     return res.status(200).json({
       success: true,
       status: "success",
       message: "Payment verified successfully",
-      data: updated,
+      data: responseData,
     });
   } catch (error) {
     return next(error);
@@ -473,7 +598,9 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
     const date = req.query.date?.trim();
     const fromDate = req.query.fromDate?.trim();
     const toDate = req.query.toDate?.trim();
-    const accountId = req.query.accountId?.trim();
+    const accountIdFromQuery = req.query.accountId?.trim();
+    const accountIdFromParams = req.params.accountId?.trim();
+    const accountId = accountIdFromQuery || accountIdFromParams || null;
     const profileId = req.query.profileId?.trim();
 
     const query = {};
@@ -487,7 +614,39 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
     }
 
     if (accountId) {
-      query.accountId = String(accountId);
+      const exactAccountId = String(accountId);
+
+      if (groupId) {
+        query.accountId = exactAccountId;
+      } else {
+        const relatedGroupIds = await Customer.distinct("userGroupId", {
+          accountId: exactAccountId,
+        });
+
+        let relatedGroupIdStrings = relatedGroupIds
+          .map((id) => normalizeText(id))
+          .filter(Boolean);
+
+        if (!relatedGroupIdStrings.length) {
+          try {
+            const groupDetails = await getGroupDetails(exactAccountId);
+            relatedGroupIdStrings = Array.from(
+              extractAllTextByKeys(groupDetails, GROUP_ID_KEYS)
+            );
+          } catch (_err) {
+            // Best-effort fallback: continue with exact accountId match only.
+          }
+        }
+
+        const uniqueGroupIds = Array.from(new Set(relatedGroupIdStrings));
+
+        query.$or = [{ accountId: exactAccountId }];
+
+        if (uniqueGroupIds.length) {
+          query.$or.push({ groupId: { $in: uniqueGroupIds } });
+          query.$or.push({ profileId: { $in: uniqueGroupIds } });
+        }
+      }
     }
 
     if (profileId) {
@@ -601,11 +760,6 @@ export const getSinglePlanPaymentDetails = async (req, res, next) => {
     return next(error);
   }
 };
-
-
-
-
-
 
 
 
