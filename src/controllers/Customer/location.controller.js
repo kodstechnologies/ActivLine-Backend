@@ -4,7 +4,7 @@ import {
   getAllCountries,
   getStatesByCountry,
   getCitiesByState
-} from "../../services/customer/location.service.js";
+} from "../../services/Customer/location.service.js";
 
 
 export const fetchCountries = asyncHandler(async (req, res) => {
