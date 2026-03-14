@@ -121,7 +121,6 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
   const propertiesToHide = new Set([
     "Reset billing cycle",
     "Day of the month to reset billing cycle",
-    "description",
     "Pricing Type",
     "Rate",
   ]);
