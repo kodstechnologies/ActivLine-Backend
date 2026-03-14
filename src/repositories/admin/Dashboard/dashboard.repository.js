@@ -77,6 +77,9 @@ export const getMonthlyRevenueByGroup = ({ groupId, accountId, startDate }) => {
 
   if (groupId) {
     match.groupId = String(groupId);
+    if (accountId) {
+      match.accountId = String(accountId);
+    }
   } else if (accountId) {
     match.accountId = String(accountId);
   }
@@ -151,7 +154,7 @@ export const getCustomersCreatedByMonth = ({ accountId, startDate }) => {
   ]);
 };
 
-export const getResolvedTicketsByStaff = ({ startDate, endDate }) => {
+export const getResolvedTicketsByStaff = ({ accountId, startDate, endDate }) => {
   const match = { status: "RESOLVED" };
 
   if (startDate || endDate) {
@@ -160,26 +163,65 @@ export const getResolvedTicketsByStaff = ({ startDate, endDate }) => {
     if (endDate) match.updatedAt.$lte = endDate;
   }
 
-  return ChatRoom.aggregate([
-    { $match: match },
+  const pipeline = [{ $match: match }];
+
+  if (accountId) {
+    const customersCollection = Customer.collection.name;
+    pipeline.push(
+      {
+        $lookup: {
+          from: customersCollection,
+          localField: "customer",
+          foreignField: "_id",
+          as: "customerDoc",
+        },
+      },
+      { $unwind: "$customerDoc" },
+      { $match: { "customerDoc.accountId": String(accountId) } }
+    );
+  }
+
+  pipeline.push(
     {
       $group: {
         _id: "$assignedStaff",
         resolvedCount: { $sum: 1 },
       },
     },
-    { $sort: { resolvedCount: -1 } },
-  ]);
+    { $sort: { resolvedCount: -1 } }
+  );
+
+  return ChatRoom.aggregate(pipeline);
 };
 
-export const countResolvedTickets = ({ startDate, endDate }) => {
-  const query = { status: "RESOLVED" };
+export const countResolvedTickets = async ({ accountId, startDate, endDate }) => {
+  const match = { status: "RESOLVED" };
 
   if (startDate || endDate) {
-    query.updatedAt = {};
-    if (startDate) query.updatedAt.$gte = startDate;
-    if (endDate) query.updatedAt.$lte = endDate;
+    match.updatedAt = {};
+    if (startDate) match.updatedAt.$gte = startDate;
+    if (endDate) match.updatedAt.$lte = endDate;
   }
 
-  return ChatRoom.countDocuments(query);
+  if (!accountId) {
+    return ChatRoom.countDocuments(match);
+  }
+
+  const customersCollection = Customer.collection.name;
+  const rows = await ChatRoom.aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: customersCollection,
+        localField: "customer",
+        foreignField: "_id",
+        as: "customerDoc",
+      },
+    },
+    { $unwind: "$customerDoc" },
+    { $match: { "customerDoc.accountId": String(accountId) } },
+    { $count: "count" },
+  ]);
+
+  return rows[0]?.count || 0;
 };

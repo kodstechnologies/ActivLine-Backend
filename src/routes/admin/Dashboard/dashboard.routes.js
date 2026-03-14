@@ -14,7 +14,7 @@ import { allowRoles } from "../../../middlewares/role.middleware.js";
 
 const router = Router();
 
-router.use(verifyJWT, allowRoles("ADMIN", "ADMIN_STAFF"));
+router.use(verifyJWT, allowRoles("ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"));
 
 router.get("/open-tickets", getOpenTickets);
 router.get("/in-progress-tickets", getInProgressTickets);

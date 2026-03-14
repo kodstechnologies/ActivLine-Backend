@@ -82,7 +82,24 @@ export const getAssignedRoomsCount = asyncHandler(async (req, res) => {
 });
 
 export const getReportSummary = asyncHandler(async (req, res) => {
-  const { groupId, accountId, months } = req.query;
+  let { groupId, accountId, months } = req.query;
+
+  if (req.user?.role === "FRANCHISE_ADMIN") {
+    if (!req.user.accountId) {
+      return res.status(403).json(
+        ApiResponse.error("Access denied", null)
+      );
+    }
+
+    if (accountId && String(accountId) !== String(req.user.accountId)) {
+      return res.status(403).json(
+        ApiResponse.error("Access denied", null)
+      );
+    }
+
+    accountId = req.user.accountId;
+  }
+
   const data = await DashboardService.getReportSummary({
     groupId,
     accountId,
