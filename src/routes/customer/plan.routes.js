@@ -1,15 +1,40 @@
 import express from "express";
 import { getAllProfilesWithDetails } from "../../controllers/Customer/plan.controller.js";
 import {
+  getCustomerPlanSummary,
+  getCustomerPlanSummaryById,
+} from "../../controllers/Customer/customerPlanSummary.controller.js";
+import { getCustomerProfiles } from "../../controllers/Customer/customerProfiles.controller.js";
+import {
   createPlanOrder,
   verifyPlanPayment,
   getPlanPaymentHistoryByGroup,
   getSinglePlanPaymentDetails,
 } from "../../controllers/payment/razorpay.controller.js";
+import { verifyJWT } from "../../middlewares/auth.middleware.js";
+import { allowRoles } from "../../middlewares/role.middleware.js";
 
 const router = express.Router();
 
 router.get("/full-details", getAllProfilesWithDetails);
+router.get(
+  "/plans/summary",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getCustomerPlanSummary
+);
+router.get(
+  "/:customerId/plans/summary",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getCustomerPlanSummaryById
+);
+router.get(
+  "/:customerId/profiles",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getCustomerProfiles
+);
 router.post("/plans/:profileId/create-order", createPlanOrder);
 router.post("/plans/verify-payment", verifyPlanPayment);
 

@@ -46,7 +46,7 @@ await customer.save({ validateBeforeSave: false }); // ✅ FIX
     });
   }
 
-  if (customer.phoneNumber) {
+  if (customer.phoneNumber && process.env.SMS_ENABLED === "true") {
     await sendSMS(
       customer.phoneNumber,
       `Your ActivLine OTP is ${otp}. Valid for 10 minutes.`

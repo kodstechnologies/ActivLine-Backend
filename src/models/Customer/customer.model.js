@@ -261,6 +261,14 @@ const customerSchema = new mongoose.Schema(
     rawPayload: {
       type: Object,
     },
+
+    /* =================================
+       🔹 OTP (Password Reset)
+    ================================= */
+    otp: {
+      code: String,
+      expiresAt: Date,
+    },
   },
   { timestamps: true }
 );
