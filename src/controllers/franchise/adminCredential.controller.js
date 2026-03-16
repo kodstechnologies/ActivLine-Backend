@@ -4,6 +4,7 @@ import axios from "axios";
 import bcrypt from "bcryptjs";
 import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
+import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
 
 export const createFranchiseAdmin = asyncHandler(async (req, res) => {
@@ -31,6 +32,18 @@ export const createFranchiseAdmin = asyncHandler(async (req, res) => {
     role: "FRANCHISE_ADMIN",
     status: "ACTIVE",
     profileImage
+  });
+
+  await createActivityLog({
+    req,
+    user: req.user || { _id: admin._id, role: "FRANCHISE_ADMIN" },
+    action: "CREATE",
+    module: "FRANCHISE_ADMIN",
+    description: `Franchise admin created: ${admin.name}`,
+    targetId: admin._id,
+    metadata: {
+      accountId: admin.accountId,
+    },
   });
 
   res.status(201).json({
@@ -219,6 +232,17 @@ export const updateFranchiseAdmin = async (req,res)=>{
    {new:true}
  );
 
+ await createActivityLog({
+   req,
+   action: "UPDATE",
+   module: "FRANCHISE_ADMIN",
+   description: `Franchise admin updated: ${admin?.name || admin?._id || id}`,
+   targetId: admin?._id || id,
+   metadata: {
+     updatedFields: Object.keys(updateData),
+   },
+ });
+
  res.json({
    success:true,
    message:"Admin updated",
@@ -241,6 +265,14 @@ export const deleteFranchiseAdmin = async (req,res)=>{
  const { id } = req.params;
 
  await FranchiseAdmin.findByIdAndDelete(id);
+
+ await createActivityLog({
+   req,
+   action: "DELETE",
+   module: "FRANCHISE_ADMIN",
+   description: "Franchise admin deleted",
+   targetId: id,
+ });
 
  res.json({
    success:true,
@@ -283,6 +315,18 @@ export const franchiseAdminLogin = async (req,res)=>{
    process.env.JWT_SECRET,
    {expiresIn:"1d"}
  );
+
+ await createActivityLog({
+   req,
+   user: { _id: admin._id, role: "FRANCHISE_ADMIN" },
+   action: "LOGIN",
+   module: "AUTH",
+   description: `FRANCHISE_ADMIN ${admin.name} logged in`,
+   targetId: admin._id,
+   metadata: {
+     accountId: admin.accountId,
+   },
+ });
 
  res.json({
    success:true,

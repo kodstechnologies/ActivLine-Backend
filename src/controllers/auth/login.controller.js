@@ -23,7 +23,7 @@ export const    login = asyncHandler(async (req, res) => {
 
   await createActivityLog({
     req,
-    user: result.user,
+    user: { _id: result.user.id, role: result.user.role },
     action: "LOGIN",
     module: "AUTH",
     description: `${result.user.role} ${result.user.name} logged in successfully from account ${result.user.accountId}`,

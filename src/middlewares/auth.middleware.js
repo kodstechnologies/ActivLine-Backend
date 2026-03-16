@@ -7,22 +7,51 @@ import Admin from "../models/auth/auth.model.js";
 import StaffStatus from "../models/staff/Staff.model.js";
 import { ROLES } from "../constants/roles.js";
 import CustomerSession from "../models/Customer/customerLogin.model.js";
+import { refreshAccessToken } from "../services/auth/refresh.service.js";
 
 /**
  * 🔐 Verify JWT (NON-BREAKING, PRODUCTION SAFE)
  */
 export const verifyJWT = asyncHandler(async (req, _res, next) => {
+  const res = _res;
+  const hasBearer = req.headers.authorization?.startsWith("Bearer ");
   let token;
 
   // 1️⃣ Extract token (cookie OR header)
-  if (req.headers.authorization?.startsWith("Bearer ")) {
+  if (hasBearer) {
     token = req.headers.authorization.slice(7);
   } else if (req.cookies?.accessToken) {
     token = req.cookies.accessToken;
   }
 
   // 2️⃣ No token
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches login cookie behavior)
+  };
+
   if (!token) {
+    if (!hasBearer && req.cookies?.refreshToken) {
+      const refreshed = await refreshAccessToken({
+        refreshToken: req.cookies.refreshToken,
+      });
+
+      if (res?.cookie) {
+        res.cookie("accessToken", refreshed.accessToken, cookieOptions);
+      }
+
+      req.user = {
+        _id: refreshed.user._id,
+        role: (refreshed.user.role || "CUSTOMER").toUpperCase(),
+        email: refreshed.user.email || null,
+        accountId: refreshed.user.accountId || null,
+      };
+
+      return next();
+    }
+
     throw new ApiError(401, "Unauthorized request");
   }
 
@@ -31,17 +60,39 @@ export const verifyJWT = asyncHandler(async (req, _res, next) => {
     decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
   } catch (err) {
     // ❗ Keep same behavior as before
+    if (
+      err?.name === "TokenExpiredError" &&
+      !hasBearer &&
+      req.cookies?.refreshToken
+    ) {
+      const refreshed = await refreshAccessToken({
+        refreshToken: req.cookies.refreshToken,
+      });
+
+      if (res?.cookie) {
+        res.cookie("accessToken", refreshed.accessToken, cookieOptions);
+      }
+
+      req.user = {
+        _id: refreshed.user._id,
+        role: (refreshed.user.role || "CUSTOMER").toUpperCase(),
+        email: refreshed.user.email || null,
+        accountId: refreshed.user.accountId || null,
+      };
+
+      return next();
+    }
+
     throw new ApiError(401, "Invalid or expired access token");
   }
 
   // 3️⃣ Backward-compatible user attach
- req.user = {
-  _id: decoded._id || decoded.id,
-  role: (decoded.role || decoded.type || "CUSTOMER").toUpperCase(),
-  email: decoded.email || null,
-  accountId: decoded.accountId || null,
-};
-
+  req.user = {
+    _id: decoded._id || decoded.id,
+    role: (decoded.role || decoded.type || "CUSTOMER").toUpperCase(),
+    email: decoded.email || null,
+    accountId: decoded.accountId || null,
+  };
 
   // 4️⃣ Safety check (won't break old tokens)
   if (!req.user._id) {

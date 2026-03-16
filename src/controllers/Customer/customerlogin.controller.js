@@ -8,6 +8,7 @@ import {
   generateRefreshToken,
 } from "../../utils/customerTokens.js";
 import jwt from "jsonwebtoken";
+import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
 export const customerLogin = asyncHandler(async (req, res) => {
   const { identifier, password } = req.body || {};
@@ -50,6 +51,15 @@ export const customerLogin = asyncHandler(async (req, res) => {
     { upsert: true }
   );
 
+  await createActivityLog({
+    req,
+    user: { _id: customer._id, role: "CUSTOMER" },
+    action: "LOGIN",
+    module: "AUTH",
+    description: `Customer ${customer.firstName || customer.userName || customer._id} logged in`,
+    targetId: customer._id,
+  });
+
   // 6️⃣ Response
   res
     .cookie("accessToken", accessToken, {
@@ -77,6 +87,7 @@ export const customerLogin = asyncHandler(async (req, res) => {
     //     fullName: customer.fullName,
     //   },
     });
+
 });
 // src/controllers/auth/customerAuth.controller.js
 
@@ -193,6 +204,19 @@ export const customerLogout = asyncHandler(async (req, res) => {
     deviceId,
   });
 
+  await createActivityLog({
+    req,
+    user: req.user,
+    action: "LOGOUT",
+    module: "AUTH",
+    description: "Customer logged out",
+    targetId: userId,
+    metadata: {
+      deviceId,
+      sessionRemoved: result.deletedCount === 1,
+    },
+  });
+
   // 5️⃣ Clear cookies (browser safety)
   res
     .clearCookie("accessToken", {
@@ -213,8 +237,3 @@ export const customerLogout = asyncHandler(async (req, res) => {
       sessionRemoved: result.deletedCount === 1,
     });
 });
-
-
-
-
-

@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import { sendCustomerWelcomeEmail } from "../../utils/mail.util.js";
+import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
 /**
  * @description Get all customers with filtering, searching, and pagination
@@ -167,6 +168,22 @@ export const createCustomer = asyncHandler(async (req, res) => {
       emailId: value.emailId,
     });
   }
+
+  await createActivityLog({
+    req,
+    user: req.user || { _id: result.customer?._id, role: "CUSTOMER" },
+    action: "CREATE",
+    module: "CUSTOMER",
+    description: req.user
+      ? `Customer created by ${req.user.role}`
+      : "Customer self-registered",
+    targetId: result.customer?._id || null,
+    metadata: {
+      customerId: result.customer?._id || null,
+      accountId: result.customer?.accountId || null,
+      createdByRole: req.user?.role || "CUSTOMER",
+    },
+  });
 
   return res.status(201).json(
     ApiResponse.success(

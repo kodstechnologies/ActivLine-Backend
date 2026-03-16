@@ -1,6 +1,5 @@
 import ApiError from "../../utils/ApiError.js";
 import * as LogoutRepo from "../../repositories/auth/logout.repository.js";
-import * as AdminRepo from "../../repositories/admin/admin.repository.js";
 import * as StaffStatusRepo from "../../repositories/staff/adminStaff.repository.js";
 
 /**

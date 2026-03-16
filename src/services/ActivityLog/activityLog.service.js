@@ -1,5 +1,6 @@
 import * as Repo from "../../repositories/ActivityLog/activityLog.repository.js";
 import Admin from "../../models/auth/auth.model.js";
+import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 import Customer from "../../models/Customer/customer.model.js";
 import Staff from "../../models/staff/Staff.model.js";
 
@@ -35,6 +36,10 @@ export const createActivityLog = async ({
     case "CUSTOMER":
       actor = await Customer.findById(actorRef._id).lean();
       actorModelName = "Customer";
+      break;
+    case "FRANCHISE_ADMIN":
+      actor = await FranchiseAdmin.findById(actorRef._id).lean();
+      actorModelName = "FranchiseAdmin";
       break;
 
     default:

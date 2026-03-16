@@ -2,10 +2,22 @@ import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import { validateUpdateAdminStaff,validateStaffIdParam } from "../../validations/staff/adminStaff.manage.validation.js";
 import * as StaffService from "../../services/staff/adminStaff.manage.service.js";
+import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
 
 export const getAllAdminStaff = asyncHandler(async (req, res) => {
   const result = await StaffService.getAllAdminStaff(req.query || {});
+
+  await createActivityLog({
+    req,
+    action: "VIEW",
+    module: "ADMIN_STAFF",
+    description: "Viewed admin staff list",
+    metadata: {
+      query: req.query || {},
+      isSingle: result.isSingle,
+    },
+  });
 
   if (result.isSingle) {
     return res.json(
@@ -45,6 +57,17 @@ export const updateAdminStaff = asyncHandler(async (req, res) => {
     req.body
   );
 
+  await createActivityLog({
+    req,
+    action: "UPDATE",
+    module: "ADMIN_STAFF",
+    description: `Updated admin staff: ${staff.name || staff._id}`,
+    targetId: staff._id,
+    metadata: {
+      updatedFields: Object.keys(req.body || {}),
+    },
+  });
+
   return res.json(
     ApiResponse.success(staff, "Admin staff updated successfully")
   );
@@ -52,6 +75,14 @@ export const updateAdminStaff = asyncHandler(async (req, res) => {
 
 export const deleteAdminStaff = asyncHandler(async (req, res) => {
   await StaffService.deleteAdminStaff(req.params.id);
+
+  await createActivityLog({
+    req,
+    action: "DELETE",
+    module: "ADMIN_STAFF",
+    description: "Deleted admin staff",
+    targetId: req.params.id,
+  });
 
   return res.json(
     ApiResponse.success(null, "Admin staff deleted successfully")

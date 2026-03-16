@@ -135,6 +135,18 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
 
   // CLOSE => delete room + full chat history + room-linked notifications
   if (newStatus === "CLOSED") {
+    await createActivityLog({
+      req,
+      action: "UPDATE",
+      module: "TICKET",
+      description: `Ticket status changed from ${currentStatus} to CLOSED`,
+      targetId: roomId,
+      metadata: {
+        from: currentStatus,
+        to: "CLOSED",
+      },
+    });
+
     await Promise.all([
       ChatMessage.deleteMany({ roomId }),
       ChatRoom.deleteOne({ _id: roomId }),
@@ -150,6 +162,18 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
   }
 
   const updatedRoom = await ChatRoomRepo.updateStatus(roomId, newStatus);
+
+  await createActivityLog({
+    req,
+    action: "UPDATE",
+    module: "TICKET",
+    description: `Ticket status changed from ${currentStatus} to ${newStatus}`,
+    targetId: roomId,
+    metadata: {
+      from: currentStatus,
+      to: newStatus,
+    },
+  });
 
   // 🔍 Find the first message sent by the customer
   const firstCustomerMsg = await ChatMessage.findOne({

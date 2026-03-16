@@ -11,12 +11,12 @@ const activityLogSchema = new mongoose.Schema(
     actorModel: {
       type: String,
       required: true,
-      enum: ["SUPER_ADMIN","Admin", "ADMIN_STAFF", "Customer", "Staff"],
+      enum: ["SUPER_ADMIN","Admin", "ADMIN_STAFF", "Customer", "Staff", "FranchiseAdmin"],
     },
     actorRole: {
       type: String,
       required: true,
-      enum: ["SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "STAFF", "CUSTOMER"],
+      enum: ["SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "STAFF", "CUSTOMER", "FRANCHISE_ADMIN"],
       index: true,
     },
     actorName: String,
