@@ -40,7 +40,10 @@ export const createCustomerSchema = Joi.object({
   "installationAddress-pin": Joi.string().optional(),
   "installationAddress-state": Joi.string().optional(),
   "installationAddress-country": Joi.string().optional(),
-  referralCode: Joi.string().optional(),
+  referralCode: Joi.alternatives()
+    .try(Joi.string(), Joi.number())
+    .allow("", null)
+    .optional(),
 
   notifyUserSms: Joi.string().valid("on", "off").optional(),
 });
