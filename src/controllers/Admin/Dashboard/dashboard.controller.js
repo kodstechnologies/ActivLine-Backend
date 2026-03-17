@@ -35,7 +35,12 @@ export const getRecentTickets = asyncHandler(async (req, res) => {
   const mapped = rooms.map((room) => ({
     ticketId: room._id,
     subject: "Customer Support Chat",
-    customer: room.customer?.fullName || "Unknown",
+    customer:
+      room.customer?.userName ||
+      `${room.customer?.firstName || ""} ${room.customer?.lastName || ""}`.trim() ||
+      room.customer?.emailId ||
+      room.customer?.email ||
+      "Unknown",
     status: room.status,
     createdAt: room.createdAt,
   }));
@@ -118,13 +123,7 @@ export const getGlobalGraphSummary = asyncHandler(async (req, res) => {
 });
 
 export const getAssignedCustomersForStaff = asyncHandler(async (req, res) => {
-  const result = await StaffService.getAssignedCustomers(req.user, req.query || {});
+  const data = await StaffService.getStaffGraphSummary(req.user, req.query || {});
 
-  res.json(
-    ApiResponse.success(
-      result.data,
-      "Assigned customers fetched successfully",
-      result.meta
-    )
-  );
+  res.json(ApiResponse.success(data, "Staff graph summary fetched"));
 });

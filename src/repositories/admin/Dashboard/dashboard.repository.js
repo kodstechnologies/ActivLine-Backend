@@ -40,7 +40,7 @@ export const countDistinctCustomers = async () => {
 /* RECENT TICKETS */
 export const getRecentTickets = (limit = 5) =>
   ChatRoom.find()
-    .populate("customer", "fullName email")
+    .populate("customer", "userName firstName lastName emailId email")
     .sort({ updatedAt: -1 })
     .limit(limit);
 

@@ -150,7 +150,7 @@ export const getLatestAssignedRooms = async (limit = 5, staffId = null) => {
     .sort({ updatedAt: -1 })
     .limit(limit)
     .populate("assignedStaff", "name email role")
-    .populate("customer", "fullName name email accountId");
+    .populate("customer", "userName firstName lastName emailId accountId");
 };
 
 export const getAssignedCustomerIds = async (staffId = null) => {

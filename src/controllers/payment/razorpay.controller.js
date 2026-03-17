@@ -198,7 +198,10 @@ const extractRowsFromGroupDetails = (payload) => {
 const toCustomerSnapshot = (customer) => {
   if (!customer) {
     return {
+      customerId: null,
+      userName: null,
       accountId: null,
+      groupId: null,
       name: null,
       phoneNumber: null,
       email: null,
@@ -208,7 +211,10 @@ const toCustomerSnapshot = (customer) => {
   const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
 
   return {
+    customerId: customer._id || null,
+    userName: customer.userName || null,
     accountId: customer.accountId || null,
+    groupId: customer.userGroupId || null,
     name: customer.userName || fullName || null,
     phoneNumber: customer.phoneNumber || null,
     email: customer.emailId || null,
@@ -535,6 +541,16 @@ export const createPlanOrder = async (req, res, next) => {
       { upsert: true, new: true }
     );
 
+    const customerDoc = await Customer.findOne({
+      $or: [
+        { accountId: finalAccountId },
+        { userGroupId: Number(finalGroupId) || finalGroupId },
+        { activlineUserId: String(profileId) },
+      ],
+    })
+      .select("userName firstName lastName phoneNumber emailId accountId userGroupId")
+      .lean();
+
     return res.status(200).json({
       success: true,
       orderId: order.id,
@@ -550,6 +566,7 @@ export const createPlanOrder = async (req, res, next) => {
         billingPlanId: billingMeta.billingPlanId,
         totalPrice: billingMeta.totalPrice,
       },
+      customer: toCustomerSnapshot(customerDoc),
     });
   } catch (error) {
     return next(error);

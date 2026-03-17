@@ -5,6 +5,7 @@ import StaffStatus from "../../models/staff/Staff.model.js";
 import * as LogoutRepo from "../../repositories/auth/logout.repository.js";
 import Customer from "../../models/Customer/customer.model.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
+import ChatRoom from "../../models/chat/chatRoom.model.js";
 
 const ALLOWED_FILTER_ROLES = ["SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "STAFF", "FRANCHISE_ADMIN"];
 
@@ -80,6 +81,23 @@ const resolveScopedStaffId = (requester, staffIdFromQuery = null) => {
   }
 
   throw new ApiError(403, "Access denied");
+};
+
+const buildMonthRange = (months) => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  start.setMonth(start.getMonth() - (months - 1));
+  start.setHours(0, 0, 0, 0);
+
+  const labels = [];
+  const cursor = new Date(start);
+  for (let i = 0; i < months; i += 1) {
+    const label = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    labels.push(label);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return { startDate: start, labels };
 };
 
 export const getAllAdminStaff = async (query = {}) => {
@@ -530,6 +548,144 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
   };
 };
 
+export const getStaffGraphSummary = async (requester, query = {}) => {
+  const staffId = resolveScopedStaffId(requester, query.staffId);
+  const safeMonths = Math.min(Math.max(Number(query.months) || 6, 1), 24);
+  const { startDate, labels } = buildMonthRange(safeMonths);
+
+  const assignedCustomerIds = await StaffRepo.getAssignedCustomerIds(staffId);
+  if (!assignedCustomerIds.length) {
+    return {
+      filters: { months: safeMonths },
+      monthlyRevenue: labels.map((label) => ({
+        month: label,
+        totalAmount: 0,
+        paymentCount: 0,
+      })),
+      monthlyCustomers: labels.map((label) => ({
+        month: label,
+        totalCustomers: 0,
+      })),
+      monthlyResolvedTickets: labels.map((label) => ({
+        month: label,
+        resolvedCount: 0,
+      })),
+    };
+  }
+
+  const customers = await Customer.find({ _id: { $in: assignedCustomerIds } })
+    .select("accountId userGroupId activlineUserId createdAt")
+    .lean();
+
+  const accountIds = customers
+    .map((customer) => normalizeText(customer.accountId))
+    .filter(Boolean);
+  const groupIds = customers
+    .map((customer) => normalizeText(customer.userGroupId))
+    .filter(Boolean);
+  const profileIds = customers
+    .map((customer) => normalizeText(customer.activlineUserId))
+    .filter(Boolean);
+
+  const orFilters = [];
+  if (accountIds.length) orFilters.push({ accountId: { $in: accountIds } });
+  if (groupIds.length) orFilters.push({ groupId: { $in: groupIds } });
+  if (profileIds.length) orFilters.push({ profileId: { $in: profileIds } });
+
+  const revenueMatch = { status: "SUCCESS", createdAt: { $gte: startDate } };
+  if (orFilters.length) {
+    revenueMatch.$or = orFilters;
+  }
+
+  const [revenueRows, customerRows, resolvedRows] = await Promise.all([
+    PaymentHistory.aggregate([
+      { $match: revenueMatch },
+      {
+        $addFields: {
+          month: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$month",
+          totalAmount: { $sum: "$planAmount" },
+          paymentCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    Customer.aggregate([
+      { $match: { _id: { $in: assignedCustomerIds }, createdAt: { $gte: startDate } } },
+      {
+        $addFields: {
+          month: {
+            $dateToString: { format: "%Y-%m", date: "$createdAt" },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$month",
+          totalCustomers: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    ChatRoom.aggregate([
+      {
+        $match: {
+          status: "RESOLVED",
+          assignedStaff: new mongoose.Types.ObjectId(String(staffId)),
+          updatedAt: { $gte: startDate },
+        },
+      },
+      {
+        $addFields: {
+          month: {
+            $dateToString: { format: "%Y-%m", date: "$updatedAt" },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$month",
+          resolvedCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+  ]);
+
+  const revenueMap = new Map(revenueRows.map((row) => [row._id, row]));
+  const customerMap = new Map(customerRows.map((row) => [row._id, row]));
+  const resolvedMap = new Map(resolvedRows.map((row) => [row._id, row]));
+
+  const monthlyRevenue = labels.map((label) => ({
+    month: label,
+    totalAmount: revenueMap.get(label)?.totalAmount || 0,
+    paymentCount: revenueMap.get(label)?.paymentCount || 0,
+  }));
+
+  const monthlyCustomers = labels.map((label) => ({
+    month: label,
+    totalCustomers: customerMap.get(label)?.totalCustomers || 0,
+  }));
+
+  const monthlyResolvedTickets = labels.map((label) => ({
+    month: label,
+    resolvedCount: resolvedMap.get(label)?.resolvedCount || 0,
+  }));
+
+  return {
+    filters: { months: safeMonths },
+    monthlyRevenue,
+    monthlyCustomers,
+    monthlyResolvedTickets,
+  };
+};
+
 export const getAssignedCustomerById = async (requester, customerId, query = {}) => {
   if (!mongoose.Types.ObjectId.isValid(customerId)) {
     throw new ApiError(400, "Invalid customerId");
@@ -548,6 +704,40 @@ export const getAssignedCustomerById = async (requester, customerId, query = {})
     throw new ApiError(404, "Customer not found");
   }
 
+  const paymentPage = toPositiveInt(query.paymentPage, 1);
+  const paymentLimit = Math.min(toPositiveInt(query.paymentLimit, 10), 50);
+  const ticketLimit = Math.min(toPositiveInt(query.ticketLimit, 10), 50);
+
+  const paymentFilters = {
+    $or: [
+      customer.accountId ? { accountId: String(customer.accountId) } : null,
+      customer.userGroupId ? { groupId: String(customer.userGroupId) } : null,
+      customer.activlineUserId ? { profileId: String(customer.activlineUserId) } : null,
+    ].filter(Boolean),
+  };
+
+  const paymentSkip = (paymentPage - 1) * paymentLimit;
+
+  const [payments, paymentTotal, ticketRooms] = await Promise.all([
+    paymentFilters.$or.length
+      ? PaymentHistory.find(paymentFilters)
+          .sort({ createdAt: -1 })
+          .skip(paymentSkip)
+          .limit(paymentLimit)
+          .lean()
+      : Promise.resolve([]),
+    paymentFilters.$or.length
+      ? PaymentHistory.countDocuments(paymentFilters)
+      : Promise.resolve(0),
+    ChatRoom.find({
+      customer: new mongoose.Types.ObjectId(String(customerId)),
+      assignedStaff: new mongoose.Types.ObjectId(String(scopedStaffId)),
+    })
+      .sort({ updatedAt: -1 })
+      .limit(ticketLimit)
+      .lean(),
+  ]);
+
   const stats = await StaffRepo.getAssignedCustomerStats(scopedStaffId);
   const statMap = stats.reduce((acc, item) => {
     acc[String(item._id)] = item;
@@ -563,6 +753,35 @@ export const getAssignedCustomerById = async (requester, customerId, query = {})
     },
     assignedTicketCount: customerStat.assignedTicketCount || 0,
     lastAssignedAt: customerStat.lastAssignedAt || null,
+    paymentHistory: {
+      page: paymentPage,
+      limit: paymentLimit,
+      total: paymentTotal,
+      totalPages: paymentTotal === 0 ? 0 : Math.ceil(paymentTotal / paymentLimit),
+      data: payments.map((item) => ({
+        paymentId: String(item._id),
+        status: item.status,
+        amount: item.planAmount,
+        currency: item.currency,
+        planName: item.planName,
+        accountId: item.accountId || null,
+        groupId: item.groupId || null,
+        profileId: item.profileId || null,
+        paidAt: item.paidAt || null,
+        createdAt: item.createdAt || null,
+      })),
+    },
+    ticketRooms: {
+      count: ticketRooms.length,
+      data: ticketRooms.map((room) => ({
+        ticketId: room._id,
+        status: room.status,
+        lastMessage: room.lastMessage || null,
+        lastMessageAt: room.lastMessageAt || null,
+        createdAt: room.createdAt || null,
+        updatedAt: room.updatedAt || null,
+      })),
+    },
   };
 };
 

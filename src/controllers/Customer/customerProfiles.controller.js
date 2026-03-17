@@ -82,6 +82,25 @@ const resolveCustomerForToken = async (tokenCustomerId, paramId) => {
   return Customer.findById(tokenCustomerId).lean();
 };
 
+const formatToIST = (dateValue) => {
+  if (!dateValue) return null;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const formatted = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+
+  return `${formatted.replace(",", "")} IST`;
+};
+
 export const getCustomerProfiles = asyncHandler(async (req, res) => {
   const tokenCustomerId = req.user?._id;
   const paramId = req.params?.customerId;
@@ -133,8 +152,8 @@ export const getCustomerProfiles = asyncHandler(async (req, res) => {
         status: latestPurchase.status,
         amount: latestPurchase.planAmount,
         currency: latestPurchase.currency,
-        paidAt: latestPurchase.paidAt,
-        createdAt: latestPurchase.createdAt,
+        paidAt: formatToIST(latestPurchase.paidAt),
+        createdAt: formatToIST(latestPurchase.createdAt),
         profileId: latestPurchase.profileId,
         planName: latestPurchase.planName,
         planDetails: latestPurchase.planDetails || {},
