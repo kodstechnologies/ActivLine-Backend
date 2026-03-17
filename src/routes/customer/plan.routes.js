@@ -10,6 +10,9 @@ import {
   verifyPlanPayment,
   getPlanPaymentHistoryByGroup,
   getSinglePlanPaymentDetails,
+  getMyPlanPaymentHistory,
+  getMySinglePlanPaymentDetails,
+  downloadMyPaymentInvoice,
 } from "../../controllers/payment/razorpay.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
@@ -42,5 +45,25 @@ router.post("/plans/verify-payment", verifyPlanPayment);
 router.get("/plans/group/:groupId/payment-history", getPlanPaymentHistoryByGroup);
 router.get("/plans/payment-history", getPlanPaymentHistoryByGroup);
 router.get("/plans/payment-history/:paymentId", getSinglePlanPaymentDetails);
+
+// Customer own payment history APIs
+router.get(
+  "/plans/my/payment-history",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getMyPlanPaymentHistory
+);
+router.get(
+  "/plans/my/payment-history/:paymentId",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getMySinglePlanPaymentDetails
+);
+router.get(
+  "/plans/my/payment-history/:paymentId/invoice",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  downloadMyPaymentInvoice
+);
 
 export default router;

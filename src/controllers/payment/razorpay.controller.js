@@ -314,6 +314,47 @@ const mapPaymentHistoryDoc = (doc, customer) => {
   };
 };
 
+const buildCustomerIdentitySet = (customer) => {
+  const ids = new Set();
+
+  const accountId = normalizeText(customer?.accountId);
+  const groupId = normalizeText(customer?.userGroupId);
+  const profileId = normalizeText(customer?.activlineUserId);
+
+  if (accountId) ids.add(String(accountId));
+  if (groupId) ids.add(String(groupId));
+  if (profileId) ids.add(String(profileId));
+
+  return Array.from(ids);
+};
+
+const buildCustomerOwnershipQuery = (customer) => {
+  const ids = buildCustomerIdentitySet(customer);
+  if (!ids.length) return null;
+
+  return {
+    $or: [
+      { accountId: { $in: ids } },
+      { groupId: { $in: ids } },
+      { profileId: { $in: ids } },
+    ],
+  };
+};
+
+const isPaymentOwnedByCustomer = (paymentDoc, customer) => {
+  const ids = new Set(buildCustomerIdentitySet(customer));
+  if (!ids.size) return false;
+
+  const payment = paymentDoc?.toObject ? paymentDoc.toObject() : paymentDoc || {};
+  const matchKeys = [
+    normalizeText(payment.accountId),
+    normalizeText(payment.groupId),
+    normalizeText(payment.profileId),
+  ].filter(Boolean);
+
+  return matchKeys.some((key) => ids.has(String(key)));
+};
+
 export const createOrder = async (req, res, next) => {
   try {
     const amount = Number(req.body?.amount);
@@ -604,6 +645,277 @@ export const verifyPlanPayment = async (req, res, next) => {
       message: "Payment verified successfully",
       data: responseData,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getMyPlanPaymentHistory = async (req, res, next) => {
+  try {
+    const customerId = req.user?._id;
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const customer = await Customer.findById(customerId)
+      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const planName = req.query.planName?.trim();
+    const status = req.query.status?.trim();
+    const date = req.query.date?.trim();
+    const fromDate = req.query.fromDate?.trim();
+    const toDate = req.query.toDate?.trim();
+    const profileId = req.query.profileId?.trim();
+
+    const baseQuery = buildCustomerOwnershipQuery(customer);
+    if (!baseQuery) {
+      return res.status(200).json({
+        success: true,
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+        filters: {
+          planName: planName || null,
+          status: status || null,
+          date: date || null,
+          fromDate: fromDate || null,
+          toDate: toDate || null,
+          profileId: profileId || null,
+        },
+        summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+        data: [],
+      });
+    }
+
+    const query = { ...baseQuery };
+
+    if (planName) {
+      query.planName = { $regex: planName, $options: "i" };
+    }
+
+    if (profileId) {
+      query.profileId = String(profileId);
+    }
+
+    if (status) {
+      const upperStatus = status.toUpperCase();
+      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+        query.status = upperStatus;
+      }
+    }
+
+    if (date || fromDate || toDate) {
+      query.createdAt = {};
+      if (date) {
+        const start = new Date(date);
+        const end = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$gte = start;
+        query.createdAt.$lte = end;
+      } else {
+        if (fromDate) {
+          query.createdAt.$gte = new Date(fromDate);
+        }
+        if (toDate) {
+          const end = new Date(toDate);
+          end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total, summaryRows] = await Promise.all([
+      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const statusSummary = {
+      PENDING: 0,
+      SUCCESS: 0,
+      FAILED: 0,
+    };
+
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) {
+        statusSummary[row._id] = row.count;
+      }
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        planName: planName || null,
+        status: status || null,
+        date: date || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        profileId: profileId || null,
+      },
+      summary: statusSummary,
+      data: items.map((item) => mapPaymentHistoryDoc(item, customerSnapshot)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getMySinglePlanPaymentDetails = async (req, res, next) => {
+  try {
+    const customerId = req.user?._id;
+    const { paymentId } = req.params;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    if (!paymentId) {
+      return res.status(400).json({
+        success: false,
+        message: "paymentId is required",
+      });
+    }
+
+    const customer = await Customer.findById(customerId)
+      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const payment = await PaymentHistory.findById(paymentId);
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment details not found",
+      });
+    }
+
+    if (!isPaymentOwnedByCustomer(payment, customer)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+
+    return res.status(200).json({
+      success: true,
+      data: mapPaymentHistoryDoc(payment, customerSnapshot),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const downloadMyPaymentInvoice = async (req, res, next) => {
+  try {
+    const customerId = req.user?._id;
+    const { paymentId } = req.params;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    if (!paymentId) {
+      return res.status(400).json({
+        success: false,
+        message: "paymentId is required",
+      });
+    }
+
+    const customer = await Customer.findById(customerId)
+      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const payment = await PaymentHistory.findById(paymentId);
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment details not found",
+      });
+    }
+
+    if (!isPaymentOwnedByCustomer(payment, customer)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+    const paymentData = mapPaymentHistoryDoc(payment, customerSnapshot);
+
+    const invoiceLines = [
+      "INVOICE",
+      "------",
+      `Invoice For: ${paymentData.customer?.name || "Customer"}`,
+      `Account ID: ${paymentData.accountId || "-"}`,
+      `Group ID: ${paymentData.groupId || "-"}`,
+      `Profile ID: ${paymentData.profileId || "-"}`,
+      "",
+      `Payment ID: ${paymentData.paymentId}`,
+      `Order ID: ${paymentData.orderId || "-"}`,
+      `Razorpay Payment ID: ${paymentData.razorpayPaymentId || "-"}`,
+      `Plan: ${paymentData.planName || "-"}`,
+      `Amount: ${paymentData.amount || 0} ${paymentData.currency || "INR"}`,
+      `Status: ${paymentData.status || "-"}`,
+      `Paid At: ${paymentData.paidAt || "-"}`,
+      `Created At: ${paymentData.createdAt || "-"}`,
+    ];
+
+    const invoiceText = invoiceLines.join("\n");
+    const filename = `invoice_${paymentData.paymentId}.txt`;
+
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.status(200).send(invoiceText);
   } catch (error) {
     return next(error);
   }

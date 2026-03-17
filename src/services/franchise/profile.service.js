@@ -291,6 +291,9 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
     return null;
   };
 
+  const resolveGroupId = (profileId, existingGroupId) =>
+    getGroupIdForProfile(profileId) || normalizeText(existingGroupId) || null;
+
   if (base.isSingle) {
     if (!base.item) return base;
 
@@ -305,7 +308,7 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
         ...base.item,
         Profile: {
           ...(base.item.Profile || {}),
-          groupId: getGroupIdForProfile(profileId),
+          groupId: resolveGroupId(profileId, base.item.Profile?.groupId),
         },
         details: normalizeDetails(details),
       },
@@ -323,7 +326,7 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
         ...entry,
         Profile: {
           ...(entry.Profile || {}),
-          groupId: getGroupIdForProfile(profileId),
+          groupId: resolveGroupId(profileId, entry.Profile?.groupId),
         },
         details: normalizeDetails(details),
       };

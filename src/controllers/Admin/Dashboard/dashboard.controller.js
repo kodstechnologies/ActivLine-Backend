@@ -1,6 +1,7 @@
 import { asyncHandler } from "../../../utils/AsyncHandler.js";
 import ApiResponse from "../../../utils/ApiReponse.js";
 import * as DashboardService from "../../../services/admin/Dashboard/dashboard.service.js";
+import * as StaffService from "../../../services/staff/adminStaff.manage.service.js";
 
 /* OPEN */
 export const getOpenTickets = asyncHandler(async (req, res) => {
@@ -114,4 +115,16 @@ export const getGlobalGraphSummary = asyncHandler(async (req, res) => {
   const data = await DashboardService.getGlobalGraphSummary({ months });
 
   res.json(ApiResponse.success(data, "Global graph summary fetched"));
+});
+
+export const getAssignedCustomersForStaff = asyncHandler(async (req, res) => {
+  const result = await StaffService.getAssignedCustomers(req.user, req.query || {});
+
+  res.json(
+    ApiResponse.success(
+      result.data,
+      "Assigned customers fetched successfully",
+      result.meta
+    )
+  );
 });

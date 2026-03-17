@@ -113,6 +113,18 @@ export const getAssignedCustomers = asyncHandler(async (req, res) => {
   );
 });
 
+export const getAssignedCustomerPaymentHistory = asyncHandler(async (req, res) => {
+  const result = await StaffService.getAssignedCustomerPaymentHistory(req.user, req.query || {});
+
+  return res.json(
+    ApiResponse.success(
+      result.data,
+      "Assigned customer payment history fetched successfully",
+      result.meta
+    )
+  );
+});
+
 export const getAssignedCustomerById = asyncHandler(async (req, res) => {
   const result = await StaffService.getAssignedCustomerById(
     req.user,

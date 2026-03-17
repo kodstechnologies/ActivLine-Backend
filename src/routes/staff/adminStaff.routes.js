@@ -7,6 +7,7 @@ import {
   getAssignedStaffStats,
   getLatestAssignedRooms,
   getAssignedCustomers,
+  getAssignedCustomerPaymentHistory,
   getAssignedCustomerById,
   updateAssignedCustomer,
   deleteAssignedCustomer,
@@ -38,6 +39,13 @@ router.get(
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF"),
   getAssignedCustomers
+);
+
+router.get(
+  "/assigned-payment-history",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF"),
+  getAssignedCustomerPaymentHistory
 );
 
 router.get(

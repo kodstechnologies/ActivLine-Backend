@@ -4,6 +4,7 @@ import * as StaffRepo from "../../repositories/staff/adminStaff.repository.js";
 import StaffStatus from "../../models/staff/Staff.model.js";
 import * as LogoutRepo from "../../repositories/auth/logout.repository.js";
 import Customer from "../../models/Customer/customer.model.js";
+import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 
 const ALLOWED_FILTER_ROLES = ["SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "STAFF", "FRANCHISE_ADMIN"];
 
@@ -24,6 +25,40 @@ const normalizeRoleFilters = (role) => {
     .filter((item) => ALLOWED_FILTER_ROLES.includes(item));
 
   return [...new Set(roles)];
+};
+
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text || null;
+};
+
+const toCustomerSnapshot = (customer) => {
+  if (!customer) return null;
+
+  const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+  return {
+    _id: customer._id,
+    name: customer.userName || fullName || null,
+    phoneNumber: customer.phoneNumber || null,
+    email: customer.emailId || null,
+    accountId: customer.accountId || null,
+    userGroupId: customer.userGroupId || null,
+    activlineUserId: customer.activlineUserId || null,
+  };
+};
+
+const resolveCustomerFromMaps = (payment, maps) => {
+  const accountId = normalizeText(payment.accountId);
+  const groupId = normalizeText(payment.groupId);
+  const profileId = normalizeText(payment.profileId);
+
+  return (
+    (accountId && maps.byAccountId.get(accountId)) ||
+    (groupId && maps.byGroupId.get(groupId)) ||
+    (profileId && maps.byProfileId.get(profileId)) ||
+    null
+  );
 };
 
 const mapAdminWithStatus = (admin, statusMap) => ({
@@ -351,6 +386,136 @@ export const getAssignedCustomers = async (requester, query = {}) => {
       },
       assignedTicketCount: stat.assignedTicketCount || 0,
       lastAssignedAt: stat.lastAssignedAt || null,
+    };
+  });
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+    },
+  };
+};
+
+export const getAssignedCustomerPaymentHistory = async (requester, query = {}) => {
+  const page = toPositiveInt(query.page, 1);
+  const limit = Math.min(toPositiveInt(query.limit, 20), 100);
+  const staffIdFromQuery = query.staffId ? String(query.staffId).trim() : null;
+  const scopedStaffId = resolveScopedStaffId(requester, staffIdFromQuery);
+  const status = query.status ? String(query.status).trim().toUpperCase() : null;
+  const planName = query.planName ? String(query.planName).trim() : null;
+  const fromDate = query.fromDate ? String(query.fromDate).trim() : null;
+  const toDate = query.toDate ? String(query.toDate).trim() : null;
+
+  const assignedCustomerIds = await StaffRepo.getAssignedCustomerIds(scopedStaffId);
+  if (!assignedCustomerIds.length) {
+    return {
+      data: [],
+      meta: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+      },
+    };
+  }
+
+  const customers = await Customer.find({ _id: { $in: assignedCustomerIds } })
+    .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+    .lean();
+
+  const accountIds = customers
+    .map((customer) => normalizeText(customer.accountId))
+    .filter(Boolean);
+  const groupIds = customers
+    .map((customer) => normalizeText(customer.userGroupId))
+    .filter(Boolean);
+  const profileIds = customers
+    .map((customer) => normalizeText(customer.activlineUserId))
+    .filter(Boolean);
+
+  const orFilters = [];
+  if (accountIds.length) orFilters.push({ accountId: { $in: accountIds } });
+  if (groupIds.length) orFilters.push({ groupId: { $in: groupIds } });
+  if (profileIds.length) orFilters.push({ profileId: { $in: profileIds } });
+
+  if (!orFilters.length) {
+    return {
+      data: [],
+      meta: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+      },
+    };
+  }
+
+  const filter = { $or: orFilters };
+  if (status && ["PENDING", "SUCCESS", "FAILED"].includes(status)) {
+    filter.status = status;
+  }
+  if (planName) {
+    filter.planName = { $regex: planName, $options: "i" };
+  }
+
+  if (fromDate || toDate) {
+    filter.createdAt = {};
+    if (fromDate) {
+      filter.createdAt.$gte = new Date(fromDate);
+    }
+    if (toDate) {
+      const end = new Date(toDate);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
+
+  const skip = (page - 1) * limit;
+  const [items, total] = await Promise.all([
+    PaymentHistory.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+    PaymentHistory.countDocuments(filter),
+  ]);
+
+  const maps = {
+    byAccountId: new Map(),
+    byGroupId: new Map(),
+    byProfileId: new Map(),
+  };
+
+  for (const customer of customers) {
+    const accountKey = normalizeText(customer.accountId);
+    const groupKey = normalizeText(customer.userGroupId);
+    const profileKey = normalizeText(customer.activlineUserId);
+
+    if (accountKey && !maps.byAccountId.has(accountKey)) {
+      maps.byAccountId.set(accountKey, toCustomerSnapshot(customer));
+    }
+    if (groupKey && !maps.byGroupId.has(groupKey)) {
+      maps.byGroupId.set(groupKey, toCustomerSnapshot(customer));
+    }
+    if (profileKey && !maps.byProfileId.has(profileKey)) {
+      maps.byProfileId.set(profileKey, toCustomerSnapshot(customer));
+    }
+  }
+
+  const data = items.map((item) => {
+    const customer = resolveCustomerFromMaps(item, maps);
+    return {
+      paymentId: String(item._id),
+      status: item.status,
+      amount: item.planAmount,
+      currency: item.currency,
+      planName: item.planName,
+      accountId: item.accountId || null,
+      groupId: item.groupId || null,
+      profileId: item.profileId || null,
+      paidAt: item.paidAt || null,
+      createdAt: item.createdAt || null,
+      customer,
     };
   });
 
