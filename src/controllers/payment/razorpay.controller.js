@@ -137,6 +137,30 @@ const getBillingMeta = (planDetails = {}) => {
   };
 };
 
+const extractPlanPeriodDays = (planDetails = {}) => {
+  const billingRows = Array.isArray(planDetails?.["billing Details"])
+    ? planDetails["billing Details"]
+    : [];
+
+  const periodRow = billingRows.find(
+    (row) => String(row?.property || "").toLowerCase() === "period"
+  );
+  const raw = normalizeText(periodRow?.value);
+  if (!raw) return null;
+
+  const match = raw.match(/(\d+)\s*(day|days|month|months|year|years)/i);
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  if (unit.startsWith("day")) return amount;
+  if (unit.startsWith("month")) return amount * 30;
+  if (unit.startsWith("year")) return amount * 365;
+  return null;
+};
+
 const extractAllTextByKeys = (value, keys, bag = new Set()) => {
   if (!value || typeof value !== "object") return bag;
 
@@ -393,6 +417,7 @@ const buildCustomerResolver = async (paymentDocs) => {
 const mapPaymentHistoryDoc = (doc, customer) => {
   const obj = doc.toObject();
   const billingMeta = getBillingMeta(obj.planDetails || {});
+  const periodDays = extractPlanPeriodDays(obj.planDetails || {});
   const resolvedPlanName = resolvePlanName(obj);
   const resolvedAccountId =
     normalizeText(obj.accountId) || normalizeText(customer?.accountId) || null;
@@ -427,6 +452,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     accountId: resolvedAccountId,
     profileId: obj.profileId,
     planName: resolvedPlanName,
+    planPeriodDays: periodDays,
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -436,6 +462,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
       profileId: obj.profileId,
       planName: resolvedPlanName,
       planAmount: obj.planAmount,
+      planPeriodDays: periodDays,
       billingPlanId: billingMeta.billingPlanId,
       totalPrice: billingMeta.totalPrice,
       details: obj.planDetails || {},
@@ -1512,14 +1539,18 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     const fromDate = req.query.fromDate?.trim();
     const toDate = req.query.toDate?.trim();
     const accountId = req.query.accountId?.trim();
+    const franchise = req.query.franchise?.trim();
     const groupId = req.query.groupId?.trim();
     const profileId = req.query.profileId?.trim();
     const userName = req.query.userName?.trim();
+    const search = req.query.search?.trim();
 
     const query = {};
 
-    if (accountId) {
-      query.accountId = String(accountId);
+    const resolvedAccountId = accountId || franchise || null;
+
+    if (resolvedAccountId) {
+      query.accountId = String(resolvedAccountId);
     }
     if (groupId) {
       query.groupId = String(groupId);
@@ -1532,6 +1563,19 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     }
     if (userName) {
       query.paidByUserName = { $regex: userName, $options: "i" };
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      query.$or = [
+        { accountId: { $regex: searchRegex } },
+        { groupId: { $regex: searchRegex } },
+        { profileId: { $regex: searchRegex } },
+        { planName: { $regex: searchRegex } },
+        { paidByUserName: { $regex: searchRegex } },
+        { razorpayOrderId: { $regex: searchRegex } },
+        { razorpayPaymentId: { $regex: searchRegex } },
+      ];
     }
 
     if (status) {
@@ -1594,7 +1638,8 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
       total,
       totalPages: Math.ceil(total / limit),
       filters: {
-        accountId: accountId || null,
+        accountId: resolvedAccountId || null,
+        franchise: franchise || null,
         groupId: groupId || null,
         profileId: profileId || null,
         planName: planName || null,
@@ -1603,6 +1648,7 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
         fromDate: fromDate || null,
         toDate: toDate || null,
         userName: userName || null,
+        search: search || null,
       },
       summary: statusSummary,
       data: items.map((item) => {
