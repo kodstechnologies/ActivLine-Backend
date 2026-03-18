@@ -181,6 +181,48 @@ const normalizeText = (value) => {
   return text || null;
 };
 
+const resolvePlanNameFromDetails = (planDetails, fallback) => {
+  if (!planDetails || typeof planDetails !== "object") return fallback;
+
+  const direct =
+    normalizeText(planDetails.name) ||
+    normalizeText(planDetails.planName) ||
+    normalizeText(planDetails.profileName);
+  if (direct) return direct;
+
+  const billingRows = Array.isArray(planDetails["billing Details"])
+    ? planDetails["billing Details"]
+    : [];
+  const profileRows = Array.isArray(planDetails["profile Details"])
+    ? planDetails["profile Details"]
+    : [];
+
+  const fromBilling = billingRows.find(
+    (row) => String(row?.property || "").toLowerCase() === "description"
+  );
+  const billingDesc = normalizeText(fromBilling?.value);
+  if (billingDesc) return billingDesc;
+
+  const fromProfile = profileRows.find(
+    (row) => String(row?.property || "").toLowerCase() === "package type"
+  );
+  const profileVal = normalizeText(fromProfile?.value);
+  if (profileVal) return profileVal;
+
+  return fallback;
+};
+
+const resolvePlanName = (paymentObj) => {
+  const raw = normalizeText(paymentObj?.planName);
+  const fallback = raw;
+  const candidate = resolvePlanNameFromDetails(paymentObj?.planDetails, fallback);
+
+  if (!raw) return candidate;
+  if (!candidate) return raw;
+  if (raw.toLowerCase().startsWith("plan_")) return candidate;
+  return raw;
+};
+
 const extractRowsFromGroupDetails = (payload) => {
   if (!payload) return [];
 
@@ -351,6 +393,7 @@ const buildCustomerResolver = async (paymentDocs) => {
 const mapPaymentHistoryDoc = (doc, customer) => {
   const obj = doc.toObject();
   const billingMeta = getBillingMeta(obj.planDetails || {});
+  const resolvedPlanName = resolvePlanName(obj);
   const resolvedAccountId =
     normalizeText(obj.accountId) || normalizeText(customer?.accountId) || null;
   const paidBy =
@@ -383,7 +426,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     groupId: obj.groupId,
     accountId: resolvedAccountId,
     profileId: obj.profileId,
-    planName: obj.planName,
+    planName: resolvedPlanName,
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -391,7 +434,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     paidBy,
     plan: {
       profileId: obj.profileId,
-      planName: obj.planName,
+      planName: resolvedPlanName,
       planAmount: obj.planAmount,
       billingPlanId: billingMeta.billingPlanId,
       totalPrice: billingMeta.totalPrice,
