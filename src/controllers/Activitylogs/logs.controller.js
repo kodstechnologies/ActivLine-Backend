@@ -6,6 +6,39 @@ import { getLogsSchema } from "../../validations/ActivityLog/activityLog.validat
 // src/controllers/auth/login.controller.js
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
+const normalizeActorId = (actorId) => {
+  if (!actorId || typeof actorId !== "object") return actorId;
+
+  const firstLast = [actorId.firstName, actorId.lastName].filter(Boolean).join(" ");
+  const name =
+    actorId.name ||
+    actorId.fullName ||
+    actorId.userName ||
+    (firstLast ? firstLast.trim() : null) ||
+    null;
+
+  const email = actorId.email || actorId.emailId || null;
+  const phone = actorId.mobile || actorId.phoneNumber || null;
+
+  return {
+    _id: actorId._id,
+    name,
+    email,
+    phone,
+  };
+};
+
+const normalizeLogs = (logs = []) =>
+  logs.map((log) => {
+    const obj = log?.toObject ? log.toObject() : log;
+    const normalizedActor = normalizeActorId(obj.actorId);
+    return {
+      ...obj,
+      actorId: normalizedActor,
+      actorName: obj.actorName || normalizedActor?.name || null,
+    };
+  });
+
 
 
 export const getActivityLogs = asyncHandler(async (req, res) => {
@@ -21,7 +54,7 @@ export const getActivityLogs = asyncHandler(async (req, res) => {
 
   const logs = await Repo.getLogs(filter, limit);
 
-  res.json(ApiResponse.success(logs, "Logs fetched successfully"));
+  res.json(ApiResponse.success(normalizeLogs(logs), "Logs fetched successfully"));
 });
 
 /**
@@ -38,7 +71,7 @@ export const getAllLogs = asyncHandler(async (req, res) => {
 
   const logs = await Repo.getLogs(filter, Number(limit));
 
-  res.json(ApiResponse.success(logs, "Filtered logs fetched"));
+  res.json(ApiResponse.success(normalizeLogs(logs), "Filtered logs fetched"));
 });
 
 
@@ -54,7 +87,7 @@ export const getLogsByUser = asyncHandler(async (req, res) => {
     Number(limit)
   );
 
-  res.json(ApiResponse.success(logs, "User logs fetched"));
+  res.json(ApiResponse.success(normalizeLogs(logs), "User logs fetched"));
 });
 
 /**
@@ -68,5 +101,5 @@ export const getMyLogs = asyncHandler(async (req, res) => {
     Number(limit)
   );
 
-  res.json(ApiResponse.success(logs, "My logs fetched"));
+  res.json(ApiResponse.success(normalizeLogs(logs), "My logs fetched"));
 });
