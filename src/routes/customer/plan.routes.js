@@ -38,7 +38,12 @@ router.get(
   allowRoles("CUSTOMER"),
   getCustomerProfiles
 );
-router.post("/plans/:profileId/create-order", createPlanOrder);
+router.post(
+  "/plans/:profileId/create-order",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  createPlanOrder
+);
 router.post("/plans/verify-payment", verifyPlanPayment);
 
 // Payment history APIs

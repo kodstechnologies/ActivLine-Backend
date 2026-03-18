@@ -67,6 +67,32 @@ const paymentHistorySchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+    paidByCustomerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      default: null,
+      index: true,
+    },
+    paidByUserName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    paidByName: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    paidByPhone: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    paidByEmail: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

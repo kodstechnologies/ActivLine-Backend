@@ -221,6 +221,61 @@ const toCustomerSnapshot = (customer) => {
   };
 };
 
+const toPaidBySnapshot = (customer) => {
+  if (!customer) return null;
+
+  const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+
+  return {
+    paidByCustomerId: customer._id || null,
+    paidByUserName: customer.userName || null,
+    paidByName: customer.userName || fullName || null,
+    paidByPhone: customer.phoneNumber || null,
+    paidByEmail: customer.emailId || null,
+  };
+};
+
+const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
+  const normalizedAccountId = normalizeText(accountId);
+  const normalizedProfileId = normalizeText(profileId);
+  const normalizedGroupId = normalizeText(groupId);
+
+  if (normalizedAccountId) {
+    const found = await Customer.findOne({ accountId: normalizedAccountId })
+      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .sort({ updatedAt: -1 })
+      .lean();
+    if (found) return found;
+  }
+
+  if (normalizedProfileId) {
+    const found = await Customer.findOne({ activlineUserId: normalizedProfileId })
+      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .sort({ updatedAt: -1 })
+      .lean();
+    if (found) return found;
+  }
+
+  const numericGroupId = Number(normalizedGroupId);
+  if (Number.isFinite(numericGroupId)) {
+    const found = await Customer.findOne({ userGroupId: numericGroupId })
+      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .sort({ updatedAt: -1 })
+      .lean();
+    if (found) return found;
+  }
+
+  if (normalizedGroupId) {
+    const found = await Customer.findOne({ userGroupId: normalizedGroupId })
+      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .sort({ updatedAt: -1 })
+      .lean();
+    if (found) return found;
+  }
+
+  return null;
+};
+
 const buildCustomerResolver = async (paymentDocs) => {
   const keySet = new Set();
 
@@ -249,6 +304,7 @@ const buildCustomerResolver = async (paymentDocs) => {
     ],
   })
     .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+    .sort({ updatedAt: -1 })
     .lean();
 
   const byAccountId = new Map();
@@ -273,10 +329,10 @@ const buildCustomerResolver = async (paymentDocs) => {
 
     const customer =
       (accountId && byAccountId.get(accountId)) ||
+      (profileId && byActivlineUserId.get(profileId)) ||
       (groupId && byGroupId.get(groupId)) ||
       (groupId && byAccountId.get(groupId)) ||
       (groupId && byActivlineUserId.get(groupId)) ||
-      (profileId && byActivlineUserId.get(profileId)) ||
       null;
 
     return toCustomerSnapshot(customer);
@@ -288,6 +344,20 @@ const mapPaymentHistoryDoc = (doc, customer) => {
   const billingMeta = getBillingMeta(obj.planDetails || {});
   const resolvedAccountId =
     normalizeText(obj.accountId) || normalizeText(customer?.accountId) || null;
+  const paidBy =
+    obj.paidByCustomerId ||
+    obj.paidByUserName ||
+    obj.paidByName ||
+    obj.paidByPhone ||
+    obj.paidByEmail
+      ? {
+          customerId: obj.paidByCustomerId || null,
+          userName: obj.paidByUserName || null,
+          name: obj.paidByName || null,
+          phoneNumber: obj.paidByPhone || null,
+          email: obj.paidByEmail || null,
+        }
+      : null;
   const resolvedCustomer = {
     ...(customer || toCustomerSnapshot(null)),
     accountId: resolvedAccountId,
@@ -309,6 +379,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
     customer: resolvedCustomer,
+    paidBy,
     plan: {
       profileId: obj.profileId,
       planName: obj.planName,
@@ -387,9 +458,9 @@ export const createOrder = async (req, res, next) => {
       receipt: `rcpt_${Date.now()}`,
     });
 
-    return res.status(200).json({
-      success: true,
-      orderId: order.id,
+  return res.status(200).json({
+    success: true,
+    orderId: order.id,
       key,
       amount: order.amount,
       currency: order.currency,
@@ -541,15 +612,39 @@ export const createPlanOrder = async (req, res, next) => {
       { upsert: true, new: true }
     );
 
-    const customerDoc = await Customer.findOne({
-      $or: [
-        { accountId: finalAccountId },
-        { userGroupId: Number(finalGroupId) || finalGroupId },
-        { activlineUserId: String(profileId) },
-      ],
-    })
-      .select("userName firstName lastName phoneNumber emailId accountId userGroupId")
-      .lean();
+    let paidByPatch = null;
+    let customerDoc = null;
+    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+    if (req.user?._id) {
+      const authCustomer = await Customer.findById(req.user._id)
+        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .lean();
+      customerDoc = authCustomer || null;
+      paidByPatch = toPaidBySnapshot(authCustomer);
+    }
+
+    if (!paidByPatch && bodyUserName) {
+      paidByPatch = {
+        paidByUserName: bodyUserName,
+        paidByName: bodyUserName,
+      };
+    }
+
+    if (!customerDoc) {
+      const resolvedCustomer = await resolveCustomerForPayment(
+        finalAccountId,
+        finalGroupId,
+        profileId
+      );
+      customerDoc = resolvedCustomer || customerDoc;
+    }
+
+    if (paidByPatch) {
+      await PaymentHistory.updateOne(
+        { razorpayOrderId: order.id },
+        { $set: paidByPatch }
+      );
+    }
 
     return res.status(200).json({
       success: true,
@@ -585,6 +680,7 @@ export const verifyPlanPayment = async (req, res, next) => {
     const accountIdFromBody = normalizeText(req.body?.accountId);
     const groupIdFromBody = normalizeText(req.body?.groupId);
     const profileIdFromBody = normalizeText(req.body?.profileId);
+    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
@@ -617,6 +713,24 @@ export const verifyPlanPayment = async (req, res, next) => {
     if (resolvedAccountId) identityPatch.accountId = resolvedAccountId;
     if (resolvedGroupId) identityPatch.groupId = resolvedGroupId;
     if (resolvedProfileId) identityPatch.profileId = resolvedProfileId;
+    let paidByPatch = null;
+    if (req.user?._id) {
+      const authCustomer = await Customer.findById(req.user._id)
+        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .lean();
+      paidByPatch = toPaidBySnapshot(authCustomer);
+    }
+
+    if (!paidByPatch && bodyUserName) {
+      paidByPatch = {
+        paidByUserName: bodyUserName,
+        paidByName: bodyUserName,
+      };
+    }
+
+    if (!paidByPatch) {
+      // keep paidBy empty if not explicitly provided
+    }
 
     if (!isValid) {
       await PaymentHistory.findOneAndUpdate(
@@ -624,6 +738,7 @@ export const verifyPlanPayment = async (req, res, next) => {
         {
           $set: {
             ...identityPatch,
+            ...(paidByPatch || {}),
             status: "FAILED",
             razorpayPaymentId: String(razorpay_payment_id),
             razorpaySignature: String(razorpay_signature),
@@ -642,6 +757,7 @@ export const verifyPlanPayment = async (req, res, next) => {
       {
         $set: {
           ...identityPatch,
+          ...(paidByPatch || {}),
           status: "SUCCESS",
           razorpayPaymentId: String(razorpay_payment_id),
           razorpaySignature: String(razorpay_signature),
@@ -1105,6 +1221,120 @@ export const getSinglePlanPaymentDetails = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       data: mapPaymentHistoryDoc(payment, resolveCustomer(payment)),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAllPlanPaymentHistory = async (req, res, next) => {
+  try {
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const planName = req.query.planName?.trim();
+    const status = req.query.status?.trim();
+    const date = req.query.date?.trim();
+    const fromDate = req.query.fromDate?.trim();
+    const toDate = req.query.toDate?.trim();
+    const accountId = req.query.accountId?.trim();
+    const groupId = req.query.groupId?.trim();
+    const profileId = req.query.profileId?.trim();
+    const userName = req.query.userName?.trim();
+
+    const query = {};
+
+    if (accountId) {
+      query.accountId = String(accountId);
+    }
+    if (groupId) {
+      query.groupId = String(groupId);
+    }
+    if (profileId) {
+      query.profileId = String(profileId);
+    }
+    if (planName) {
+      query.planName = { $regex: planName, $options: "i" };
+    }
+    if (userName) {
+      query.paidByUserName = { $regex: userName, $options: "i" };
+    }
+
+    if (status) {
+      const upperStatus = status.toUpperCase();
+      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+        query.status = upperStatus;
+      }
+    }
+
+    if (date || fromDate || toDate) {
+      query.createdAt = {};
+      if (date) {
+        const start = new Date(date);
+        const end = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$gte = start;
+        query.createdAt.$lte = end;
+      } else {
+        if (fromDate) {
+          query.createdAt.$gte = new Date(fromDate);
+        }
+        if (toDate) {
+          const end = new Date(toDate);
+          end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total, summaryRows] = await Promise.all([
+      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const statusSummary = {
+      PENDING: 0,
+      SUCCESS: 0,
+      FAILED: 0,
+    };
+
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) {
+        statusSummary[row._id] = row.count;
+      }
+    }
+
+    const resolveCustomer = await buildCustomerResolver(items);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        accountId: accountId || null,
+        groupId: groupId || null,
+        profileId: profileId || null,
+        planName: planName || null,
+        status: status || null,
+        date: date || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        userName: userName || null,
+      },
+      summary: statusSummary,
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+        const { customer, paidBy, ...rest } = mapped || {};
+        return rest;
+      }),
     });
   } catch (error) {
     return next(error);
