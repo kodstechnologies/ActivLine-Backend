@@ -62,6 +62,57 @@ const resolveCustomerFromMaps = (payment, maps) => {
   );
 };
 
+const extractBillingMeta = (planDetails = {}) => {
+  const rows = Array.isArray(planDetails?.["billing Details"])
+    ? planDetails["billing Details"]
+    : [];
+
+  const findValue = (propertyName) => {
+    const row = rows.find(
+      (item) =>
+        String(item?.property || "").toLowerCase() ===
+        String(propertyName).toLowerCase()
+    );
+    return row?.value ?? null;
+  };
+
+  return {
+    billingPlanId: findValue("billingPlanId"),
+    totalPrice: findValue("Total Price"),
+  };
+};
+
+const mapPaymentHistoryDocFull = (doc, customer) => {
+  const obj = doc?.toObject ? doc.toObject() : doc || {};
+  const billingMeta = extractBillingMeta(obj.planDetails || {});
+
+  return {
+    paymentId: String(obj._id || doc?._id || ""),
+    orderId: obj.razorpayOrderId || null,
+    razorpayPaymentId: obj.razorpayPaymentId || null,
+    status: obj.status,
+    isPaid: obj.status === "SUCCESS",
+    amount: obj.planAmount,
+    currency: obj.currency,
+    groupId: obj.groupId || null,
+    accountId: obj.accountId || null,
+    profileId: obj.profileId || null,
+    planName: obj.planName,
+    paidAt: obj.paidAt || null,
+    createdAt: obj.createdAt || null,
+    updatedAt: obj.updatedAt || null,
+    customer: customer || null,
+    plan: {
+      profileId: obj.profileId,
+      planName: obj.planName,
+      planAmount: obj.planAmount,
+      billingPlanId: billingMeta.billingPlanId,
+      totalPrice: billingMeta.totalPrice,
+      details: obj.planDetails || {},
+    },
+  };
+};
+
 const mapAdminWithStatus = (admin, statusMap) => ({
   ...admin.toObject(),
   status: statusMap[admin._id.toString()] || "ACTIVE",
@@ -427,8 +478,11 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
   const planName = query.planName ? String(query.planName).trim() : null;
   const fromDate = query.fromDate ? String(query.fromDate).trim() : null;
   const toDate = query.toDate ? String(query.toDate).trim() : null;
+  const date = query.date ? String(query.date).trim() : null;
+  const profileId = query.profileId ? String(query.profileId).trim() : null;
+  const customerId = query.customerId ? String(query.customerId).trim() : null;
 
-  const assignedCustomerIds = await StaffRepo.getAssignedCustomerIds(scopedStaffId);
+  let assignedCustomerIds = await StaffRepo.getAssignedCustomerIds(scopedStaffId);
   if (!assignedCustomerIds.length) {
     return {
       data: [],
@@ -438,6 +492,29 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
         total: 0,
         totalPages: 0,
       },
+      summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+    };
+  }
+
+  if (customerId) {
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      throw new ApiError(400, "Invalid customerId");
+    }
+    assignedCustomerIds = assignedCustomerIds.filter(
+      (id) => String(id) === String(customerId)
+    );
+  }
+
+  if (!assignedCustomerIds.length) {
+    return {
+      data: [],
+      meta: {
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+      },
+      summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
     };
   }
 
@@ -479,23 +556,39 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
   if (planName) {
     filter.planName = { $regex: planName, $options: "i" };
   }
+  if (profileId) {
+    filter.profileId = String(profileId);
+  }
 
-  if (fromDate || toDate) {
+  if (date || fromDate || toDate) {
     filter.createdAt = {};
-    if (fromDate) {
-      filter.createdAt.$gte = new Date(fromDate);
-    }
-    if (toDate) {
-      const end = new Date(toDate);
+    if (date) {
+      const start = new Date(date);
+      const end = new Date(date);
+      start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
+      filter.createdAt.$gte = start;
       filter.createdAt.$lte = end;
+    } else {
+      if (fromDate) {
+        filter.createdAt.$gte = new Date(fromDate);
+      }
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
     }
   }
 
   const skip = (page - 1) * limit;
-  const [items, total] = await Promise.all([
-    PaymentHistory.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+  const [items, total, summaryRows] = await Promise.all([
+    PaymentHistory.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
     PaymentHistory.countDocuments(filter),
+    PaymentHistory.aggregate([
+      { $match: filter },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
   ]);
 
   const maps = {
@@ -520,21 +613,14 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
     }
   }
 
+  const summary = { PENDING: 0, SUCCESS: 0, FAILED: 0 };
+  for (const row of summaryRows) {
+    if (summary[row._id] !== undefined) summary[row._id] = row.count;
+  }
+
   const data = items.map((item) => {
     const customer = resolveCustomerFromMaps(item, maps);
-    return {
-      paymentId: String(item._id),
-      status: item.status,
-      amount: item.planAmount,
-      currency: item.currency,
-      planName: item.planName,
-      accountId: item.accountId || null,
-      groupId: item.groupId || null,
-      profileId: item.profileId || null,
-      paidAt: item.paidAt || null,
-      createdAt: item.createdAt || null,
-      customer,
-    };
+    return mapPaymentHistoryDocFull(item, customer);
   });
 
   return {
@@ -545,7 +631,79 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
       total,
       totalPages: total === 0 ? 0 : Math.ceil(total / limit),
     },
+    summary,
   };
+};
+
+export const getAssignedCustomerPaymentById = async (requester, paymentId, query = {}) => {
+  if (!mongoose.Types.ObjectId.isValid(paymentId)) {
+    throw new ApiError(400, "Invalid paymentId");
+  }
+
+  const staffIdFromQuery = query.staffId ? String(query.staffId).trim() : null;
+  const scopedStaffId = resolveScopedStaffId(requester, staffIdFromQuery);
+
+  const assignedCustomerIds = await StaffRepo.getAssignedCustomerIds(scopedStaffId);
+  if (!assignedCustomerIds.length) {
+    throw new ApiError(404, "Payment not found for this staff");
+  }
+
+  const customers = await Customer.find({ _id: { $in: assignedCustomerIds } })
+    .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+    .lean();
+
+  const accountIds = customers
+    .map((customer) => normalizeText(customer.accountId))
+    .filter(Boolean);
+  const groupIds = customers
+    .map((customer) => normalizeText(customer.userGroupId))
+    .filter(Boolean);
+  const profileIds = customers
+    .map((customer) => normalizeText(customer.activlineUserId))
+    .filter(Boolean);
+
+  const orFilters = [];
+  if (accountIds.length) orFilters.push({ accountId: { $in: accountIds } });
+  if (groupIds.length) orFilters.push({ groupId: { $in: groupIds } });
+  if (profileIds.length) orFilters.push({ profileId: { $in: profileIds } });
+
+  if (!orFilters.length) {
+    throw new ApiError(404, "Payment not found for this staff");
+  }
+
+  const payment = await PaymentHistory.findOne({
+    _id: paymentId,
+    $or: orFilters,
+  });
+
+  if (!payment) {
+    throw new ApiError(404, "Payment not found for this staff");
+  }
+
+  const maps = {
+    byAccountId: new Map(),
+    byGroupId: new Map(),
+    byProfileId: new Map(),
+  };
+
+  for (const customer of customers) {
+    const accountKey = normalizeText(customer.accountId);
+    const groupKey = normalizeText(customer.userGroupId);
+    const profileKey = normalizeText(customer.activlineUserId);
+
+    if (accountKey && !maps.byAccountId.has(accountKey)) {
+      maps.byAccountId.set(accountKey, toCustomerSnapshot(customer));
+    }
+    if (groupKey && !maps.byGroupId.has(groupKey)) {
+      maps.byGroupId.set(groupKey, toCustomerSnapshot(customer));
+    }
+    if (profileKey && !maps.byProfileId.has(profileKey)) {
+      maps.byProfileId.set(profileKey, toCustomerSnapshot(customer));
+    }
+  }
+
+  const customer = resolveCustomerFromMaps(payment, maps);
+  return mapPaymentHistoryDocFull(payment, customer);
 };
 
 export const getStaffGraphSummary = async (requester, query = {}) => {

@@ -6,6 +6,10 @@ export const renewPlan = async (payload = {}) => {
 
   Object.entries(payload).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
+    if (typeof value === "object") {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
     formData.append(key, value);
   });
 
