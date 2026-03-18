@@ -7,6 +7,15 @@ import { getProfileDetails } from "../../external/activline/activline.profile.ap
 import { getGroupDetails } from "../../services/franchise/groupDetails.service.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 import Customer from "../../models/Customer/customer.model.js";
+import PDFDocument from "pdfkit";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
+import cloudinary from "../../utils/cloudinary.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const AMOUNT_KEYS = [
   "amount",
@@ -1029,30 +1038,100 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     const customerSnapshot = toCustomerSnapshot(customer);
     const paymentData = mapPaymentHistoryDoc(payment, customerSnapshot);
 
-    const invoiceLines = [
-      "INVOICE",
-      "------",
-      `Invoice For: ${paymentData.customer?.name || "Customer"}`,
-      `Account ID: ${paymentData.accountId || "-"}`,
-      `Group ID: ${paymentData.groupId || "-"}`,
-      `Profile ID: ${paymentData.profileId || "-"}`,
-      "",
-      `Payment ID: ${paymentData.paymentId}`,
-      `Order ID: ${paymentData.orderId || "-"}`,
-      `Razorpay Payment ID: ${paymentData.razorpayPaymentId || "-"}`,
-      `Plan: ${paymentData.planName || "-"}`,
-      `Amount: ${paymentData.amount || 0} ${paymentData.currency || "INR"}`,
-      `Status: ${paymentData.status || "-"}`,
-      `Paid At: ${paymentData.paidAt || "-"}`,
-      `Created At: ${paymentData.createdAt || "-"}`,
-    ];
+    const formatDate = (value) => {
+      if (!value) return "-";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    };
 
-    const invoiceText = invoiceLines.join("\n");
-    const filename = `invoice_${paymentData.paymentId}.txt`;
+    const filename = `invoice_${paymentData.paymentId}.pdf`;
 
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    return res.status(200).send(invoiceText);
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+
+    const logoPath = path.join(__dirname, "..", "..", "logo", "activLine_logo.jpg");
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, 40, 30, { width: 120 });
+    }
+
+    doc.fontSize(20).text("INVOICE", 0, 40, { align: "right" });
+    doc.moveDown(2);
+
+    doc.fontSize(12).text(`Invoice For: ${paymentData.customer?.name || "Customer"}`);
+    doc.text(`User Name: ${paymentData.customer?.userName || "-"}`);
+    doc.text(`Account ID: ${paymentData.accountId || "-"}`);
+    doc.text(`Group ID: ${paymentData.groupId || "-"}`);
+    doc.text(`Profile ID: ${paymentData.profileId || "-"}`);
+    doc.moveDown(1);
+
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
+    doc.moveDown(1);
+
+    doc.fontSize(12).text(`Payment ID: ${paymentData.paymentId}`);
+    doc.text(`Order ID: ${paymentData.orderId || "-"}`);
+    doc.text(`Razorpay Payment ID: ${paymentData.razorpayPaymentId || "-"}`);
+    doc.text(`Plan: ${paymentData.planName || "-"}`);
+    doc.text(
+      `Amount: ${paymentData.amount || 0} ${paymentData.currency || "INR"}`
+    );
+    doc.text(`Status: ${paymentData.status || "-"}`);
+    doc.text(`Paid At: ${formatDate(paymentData.paidAt)}`);
+    doc.text(`Created At: ${formatDate(paymentData.createdAt)}`);
+
+    doc.moveDown(1);
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke();
+    doc.moveDown(1);
+
+    if (paymentData.plan?.details) {
+      doc.fontSize(12).text("Plan Details", { underline: true });
+      doc.moveDown(0.5);
+      doc.fontSize(10);
+      const planDetails = paymentData.plan.details || {};
+      const sections = Object.entries(planDetails);
+      for (const [sectionName, rows] of sections) {
+        doc.fontSize(11).text(String(sectionName));
+        if (Array.isArray(rows)) {
+          for (const row of rows) {
+            const label = row?.property || "";
+            const value = row?.value ?? "";
+            doc.fontSize(10).text(`- ${label}: ${value}`);
+          }
+        }
+        doc.moveDown(0.5);
+      }
+    }
+
+    doc.moveDown(1);
+    doc.fontSize(9).text("Thank you for your payment.", { align: "center" });
+    doc.end();
+
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+    });
+
+    const uploadResult = await uploadToCloudinary({
+      buffer: pdfBuffer,
+      mimetype: "application/pdf",
+      originalname: filename,
+    });
+
+    const downloadUrl = cloudinary.url(uploadResult.public_id, {
+      resource_type: uploadResult.resource_type || "raw",
+      type: uploadResult.type || "upload",
+      flags: "attachment",
+      format: uploadResult.format || "pdf",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Invoice uploaded successfully",
+      downloadUrl: uploadResult.secure_url,
+      
+      publicId: uploadResult.public_id,
+    });
   } catch (error) {
     return next(error);
   }
@@ -1336,8 +1415,11 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
       summary: statusSummary,
       data: items.map((item) => {
         const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
-        const { customer, paidBy, ...rest } = mapped || {};
-        return rest;
+        const doc = item?.toObject ? item.toObject() : item || {};
+        const userName =
+          doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+        const { customer, paidBy, plan, ...rest } = mapped || {};
+        return { ...rest, userName };
       }),
     });
   } catch (error) {

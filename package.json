@@ -29,6 +29,7 @@
     "multer": "^2.0.2",
     "nanoid": "^5.1.6",
     "nodemailer": "^7.0.12",
+    "pdfkit": "^0.18.0",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
     "streamifier": "^0.1.1"
