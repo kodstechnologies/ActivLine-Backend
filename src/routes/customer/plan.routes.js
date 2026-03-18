@@ -12,6 +12,7 @@ import {
   getSinglePlanPaymentDetails,
   getMyPlanPaymentHistory,
   getMySinglePlanPaymentDetails,
+  getMyLatestPlanPaymentHistory,
   downloadMyPaymentInvoice,
 } from "../../controllers/payment/razorpay.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
@@ -57,6 +58,12 @@ router.get(
   verifyJWT,
   allowRoles("CUSTOMER"),
   getMyPlanPaymentHistory
+);
+router.get(
+  "/plans/my/payment-history/latest",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getMyLatestPlanPaymentHistory
 );
 router.get(
   "/plans/my/payment-history/:paymentId",

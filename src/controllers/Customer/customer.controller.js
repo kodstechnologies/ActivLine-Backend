@@ -20,6 +20,8 @@ export const getCustomers = asyncHandler(async (req, res) => {
     limit = 10,
     status,
     userGroupId, // for plan-wise filtering
+    accountId, // account-wise filtering (admin only)
+    userType, // plan type: home/business (stored in userType)
     search, // for name search
   } = req.query;
 
@@ -49,6 +51,16 @@ export const getCustomers = asyncHandler(async (req, res) => {
     filter.userGroupId = userGroupId;
   }
 
+  // Add accountId filter for admins/super admins
+  if (accountId && req.user?.role !== "FRANCHISE_ADMIN") {
+    filter.accountId = accountId;
+  }
+
+  // Add plan type filter (home/business)
+  if (userType) {
+    filter.userType = userType;
+  }
+
   // Add search functionality for name fields
   if (search) {
     const searchRegex = new RegExp(search, "i"); // case-insensitive regex
@@ -56,6 +68,9 @@ export const getCustomers = asyncHandler(async (req, res) => {
       { firstName: { $regex: searchRegex } },
       { lastName: { $regex: searchRegex } },
       { userName: { $regex: searchRegex } },
+      { phoneNumber: { $regex: searchRegex } },
+      { emailId: { $regex: searchRegex } },
+      { accountId: { $regex: searchRegex } },
     ];
   }
 

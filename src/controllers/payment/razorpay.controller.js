@@ -989,6 +989,57 @@ export const getMySinglePlanPaymentDetails = async (req, res, next) => {
   }
 };
 
+export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
+  try {
+    const customerId = req.user?._id;
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const customer = await Customer.findById(customerId)
+      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const baseQuery = buildCustomerOwnershipQuery(customer);
+    if (!baseQuery) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      });
+    }
+
+    const latestPayment = await PaymentHistory.findOne(baseQuery).sort({ createdAt: -1 });
+
+    if (!latestPayment) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+      });
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+    const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
+    const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+
+    return res.status(200).json({
+      success: true,
+      data: rest,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const downloadMyPaymentInvoice = async (req, res, next) => {
   try {
     const customerId = req.user?._id;
@@ -1363,7 +1414,14 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
         toDate: toDate || null,
       },
       summary: statusSummary,
-      data: items.map((item) => mapPaymentHistoryDoc(item, resolveCustomer(item))),
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+        const doc = item?.toObject ? item.toObject() : item || {};
+        const userName =
+          doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+        const { customer, paidBy, plan, ...rest } = mapped || {};
+        return { ...rest, userName };
+      }),
     });
   } catch (error) {
     return next(error);
@@ -1517,6 +1575,4 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     return next(error);
   }
 };
-
-
 
