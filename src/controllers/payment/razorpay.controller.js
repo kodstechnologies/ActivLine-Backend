@@ -912,7 +912,11 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
         profileId: profileId || null,
       },
       summary: statusSummary,
-      data: items.map((item) => mapPaymentHistoryDoc(item, customerSnapshot)),
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
+        const { customer, paidBy, plan, ...rest } = mapped || {};
+        return rest;
+      }),
     });
   } catch (error) {
     return next(error);

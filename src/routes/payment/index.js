@@ -25,6 +25,12 @@ router.get(
   allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF"),
   getAllPlanPaymentHistory
 );
+router.get(
+  "/history/all-customers",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF"),
+  getAllPlanPaymentHistory
+);
 router.get("/franchise/account/:accountId/history", getPlanPaymentHistoryByGroup);
 router.get("/franchise/:groupId/history", getPlanPaymentHistoryByGroup);
 router.get("/history/:paymentId", getSinglePlanPaymentDetails);
