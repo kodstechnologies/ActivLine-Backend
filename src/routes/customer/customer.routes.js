@@ -3,6 +3,7 @@ import {
   createCustomer,
   getCustomers,
   getCustomerById,
+  updateCustomer,
 } from "../../controllers/Customer/customer.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
@@ -39,5 +40,14 @@ router
 router
   .route("/customers/:customerId")
   .get(verifyJWT, allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"), getCustomerById);
+
+// Update customer by Activline userId
+router.post(
+  "/update/:activlineUserId",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  maybeUploadCustomerFiles,
+  updateCustomer
+);
 
 export default router;

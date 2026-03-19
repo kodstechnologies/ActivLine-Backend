@@ -2,6 +2,113 @@ import { asyncHandler } from "../../../utils/AsyncHandler.js";
 import ApiResponse from "../../../utils/ApiReponse.js";
 import * as DashboardService from "../../../services/admin/Dashboard/dashboard.service.js";
 import * as StaffService from "../../../services/staff/adminStaff.manage.service.js";
+import Customer from "../../../models/Customer/customer.model.js";
+
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text || null;
+};
+
+const resolvePlanNameFromDetails = (planDetails, fallback) => {
+  if (!planDetails || typeof planDetails !== "object") return fallback;
+
+  const direct =
+    normalizeText(planDetails.name) ||
+    normalizeText(planDetails.planName) ||
+    normalizeText(planDetails.profileName);
+  if (direct) return direct;
+
+  const billingRows = Array.isArray(planDetails["billing Details"])
+    ? planDetails["billing Details"]
+    : [];
+  const profileRows = Array.isArray(planDetails["profile Details"])
+    ? planDetails["profile Details"]
+    : [];
+
+  const fromBilling = billingRows.find(
+    (row) => String(row?.property || "").toLowerCase() === "description"
+  );
+  const billingDesc = normalizeText(fromBilling?.value);
+  if (billingDesc) return billingDesc;
+
+  const fromProfile = profileRows.find(
+    (row) => String(row?.property || "").toLowerCase() === "package type"
+  );
+  const profileVal = normalizeText(fromProfile?.value);
+  if (profileVal) return profileVal;
+
+  return fallback;
+};
+
+const resolvePlanName = (paymentObj) => {
+  const raw = normalizeText(paymentObj?.planName);
+  const fallback = raw;
+  const candidate = resolvePlanNameFromDetails(paymentObj?.planDetails, fallback);
+
+  if (!raw) return candidate;
+  if (!candidate) return raw;
+  if (raw.toLowerCase().startsWith("plan_")) return candidate;
+  return raw;
+};
+
+const buildCustomerResolver = async (payments) => {
+  const keySet = new Set();
+
+  for (const item of payments || []) {
+    [item?.accountId, item?.groupId, item?.profileId].forEach((value) => {
+      const key = normalizeText(value);
+      if (key) keySet.add(key);
+    });
+  }
+
+  const keys = Array.from(keySet);
+  if (!keys.length) return () => null;
+
+  const numericGroupIds = keys
+    .map((key) => Number(key))
+    .filter((num) => Number.isFinite(num));
+
+  const customers = await Customer.find({
+    $or: [
+      { accountId: { $in: keys } },
+      { activlineUserId: { $in: keys } },
+      { userGroupId: { $in: numericGroupIds } },
+    ],
+  })
+    .select("userName firstName lastName accountId userGroupId activlineUserId")
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const byAccountId = new Map();
+  const byGroupId = new Map();
+  const byActivlineUserId = new Map();
+
+  for (const customer of customers) {
+    const accountKey = normalizeText(customer.accountId);
+    const groupKey = normalizeText(customer.userGroupId);
+    const profileKey = normalizeText(customer.activlineUserId);
+
+    if (accountKey && !byAccountId.has(accountKey)) byAccountId.set(accountKey, customer);
+    if (groupKey && !byGroupId.has(groupKey)) byGroupId.set(groupKey, customer);
+    if (profileKey && !byActivlineUserId.has(profileKey)) {
+      byActivlineUserId.set(profileKey, customer);
+    }
+  }
+
+  return (payment) => {
+    const accountId = normalizeText(payment?.accountId);
+    const groupId = normalizeText(payment?.groupId);
+    const profileId = normalizeText(payment?.profileId);
+
+    return (
+      (accountId && byAccountId.get(accountId)) ||
+      (profileId && byActivlineUserId.get(profileId)) ||
+      (groupId && byGroupId.get(groupId)) ||
+      null
+    );
+  };
+};
 
 /* OPEN */
 export const getOpenTickets = asyncHandler(async (req, res) => {
@@ -52,10 +159,19 @@ export const getRecentTickets = asyncHandler(async (req, res) => {
 export const getRecentPayments = asyncHandler(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 5, 1), 20);
   const payments = await DashboardService.getRecentPayments(limit);
+  const resolveCustomer = await buildCustomerResolver(payments);
 
-  const mapped = payments.map((item) => ({
-    paymentId: String(item._id),
-    orderId: item.razorpayOrderId,
+  const mapped = payments.map((item) => {
+    const resolvedPlanName = resolvePlanName(item);
+    const customer = resolveCustomer(item);
+    const userName =
+      customer?.userName ||
+      `${customer?.firstName || ""} ${customer?.lastName || ""}`.trim() ||
+      null;
+
+    return {
+      paymentId: String(item._id),
+      orderId: item.razorpayOrderId,
     razorpayPaymentId: item.razorpayPaymentId,
     status: item.status,
     isPaid: item.status === "SUCCESS",
@@ -63,18 +179,20 @@ export const getRecentPayments = asyncHandler(async (req, res) => {
     currency: item.currency,
     groupId: item.groupId,
     accountId: item.accountId,
-    profileId: item.profileId,
-    planName: item.planName,
-    paidAt: item.paidAt,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    plan: {
       profileId: item.profileId,
-      planName: item.planName,
-      planAmount: item.planAmount,
+      planName: resolvedPlanName,
+      paidAt: item.paidAt,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      userName,
+      plan: {
+        profileId: item.profileId,
+        planName: resolvedPlanName,
+        planAmount: item.planAmount,
       details: item.planDetails || {},
     },
-  }));
+    };
+  });
 
   res.json(ApiResponse.success(mapped, "Recent payments fetched"));
 });

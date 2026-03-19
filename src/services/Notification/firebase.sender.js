@@ -1,5 +1,6 @@
 import { firebaseAdmin } from "../../config/firebase.js";
 import Admin from "../../models/auth/auth.model.js";
+import { buildFcmMulticastMessage } from "../../utils/fcmPayload.js";
 
 export const sendFirebaseNotificationByRoles = async ({
   title,
@@ -26,17 +27,17 @@ export const sendFirebaseNotificationByRoles = async ({
 
   if (!tokens.length) return;
 
-  const response = await firebaseAdmin.messaging().sendEachForMulticast({
-    tokens,
-    notification: {
+  const response = await firebaseAdmin.messaging().sendEachForMulticast(
+    buildFcmMulticastMessage({
+      tokens,
       title,
       body: message,
-    },
-    data: {
-      type: "LEAD_CREATED",
-      payload: JSON.stringify(data), // ✅ MUST be string
-    },
-  });
+      data: {
+        type: "LEAD_CREATED",
+        payload: data,
+      },
+    })
+  );
 
   // 🔥 Optional: log failures
   response.responses.forEach((res, idx) => {

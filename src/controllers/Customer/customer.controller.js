@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 import Customer from "../../models/Customer/customer.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import { createCustomerSchema } from "../../validations/Customer/customer.validation.js";
-import { createCustomerService } from "../../services/Customer/customer.service.js";
+import {
+  createCustomerService,
+  updateCustomerService,
+} from "../../services/Customer/customer.service.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import ApiResponse from "../../utils/ApiReponse.js";
@@ -206,4 +209,55 @@ export const createCustomer = asyncHandler(async (req, res) => {
       "Your account is created in ActivLine"
     )
   );
+});
+
+/**
+ * @description Update customer by Activline userId
+ * @route POST /api/customer/update/:activlineUserId
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const updateCustomer = asyncHandler(async (req, res) => {
+  const { activlineUserId } = req.params;
+
+  if (!activlineUserId) {
+    throw new ApiError(400, "activlineUserId is required");
+  }
+
+  const existing = await Customer.findOne({ activlineUserId });
+
+  if (!existing) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    existing.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only update customers from your franchise."
+    );
+  }
+
+  const updatedCustomer = await updateCustomerService(
+    activlineUserId,
+    req.body || {},
+    req.files || {}
+  );
+
+  await createActivityLog({
+    req,
+    action: "UPDATE",
+    module: "CUSTOMER",
+    description: `Customer updated by ${req.user?.role || "ADMIN"}`,
+    targetId: existing._id,
+    metadata: {
+      activlineUserId: activlineUserId,
+      updatedFields: Object.keys(req.body || {}),
+    },
+  });
+
+  return res
+    .status(200)
+    .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
 });
