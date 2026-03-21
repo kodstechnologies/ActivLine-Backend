@@ -9,8 +9,16 @@ import { canUserSendMessage } from "../services/chat/chat.service.js";
 // import path from "path";
 
 let io;
+let isInitialized = false;
 
 export const initSocket = (server) => {
+  if (io) {
+    // Prevent duplicate Socket.IO instances in the same process
+    return io;
+  }
+  if (!server) {
+    throw new Error("Socket.io init requires a valid HTTP server");
+  }
   /* ===============================
      🌐 ALLOWED ORIGINS
      =============================== */
@@ -229,10 +237,12 @@ socket.on("send-message", async ({ roomId, message = "", attachments = [] }) => 
     });
   });
 
+  isInitialized = true;
   return io;
 };
 
 export const getIO = () => {
-  if (!io) throw new Error("Socket.io not initialized");
+  if (!io || !isInitialized) throw new Error("Socket.io not initialized");
   return io;
 };
+

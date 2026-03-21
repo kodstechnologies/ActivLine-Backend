@@ -1,4 +1,7 @@
-import { getUserSessionDetails } from "../../external/api/dashboard.api.js";
+import {
+  getUserSessionDetails,
+  getUserByPhone,
+} from "../../external/api/dashboard.api.js";
 
 export const getUsageSummary = async (userId, fromDate, toDate) => {
   const { data } = await getUserSessionDetails(userId, fromDate, toDate);
@@ -16,4 +19,12 @@ export const getUsageSummary = async (userId, fromDate, toDate) => {
     ),
     sessions,
   };
+};
+
+export const getUserSessionDetailsRaw = async (userId, fromDate, toDate) => {
+  return await getUserSessionDetails(userId, fromDate, toDate);
+};
+
+export const getUserByPhoneRaw = async (phone) => {
+  return await getUserByPhone(phone);
 };

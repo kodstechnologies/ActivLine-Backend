@@ -1,4 +1,8 @@
-import { getUsageSummary } from "../../services/Customer/dashboar.services.js";
+import {
+  getUsageSummary,
+  getUserSessionDetailsRaw,
+  getUserByPhoneRaw,
+} from "../../services/Customer/dashboar.services.js";
 
 export const getUserUsage = async (req, res, next) => {
   try {
@@ -11,6 +15,47 @@ export const getUserUsage = async (req, res, next) => {
       status: "success",
       data,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getUserSessionDetails = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    const response = await getUserSessionDetailsRaw(userId, fromDate, toDate);
+    const statusCode =
+      typeof response?.errorCode === "number" ? response.errorCode : 200;
+
+    res.status(statusCode).json(response);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getUserByPhoneDetails = async (req, res, next) => {
+  try {
+    const { phone } = req.params;
+    const { username } = req.query;
+
+    const response = await getUserByPhoneRaw(phone);
+
+    if (!username) {
+      return res.status(200).json(response);
+    }
+
+    const normalized = String(username).trim().toLowerCase();
+    const filtered = (Array.isArray(response) ? response : []).filter(
+      (group) => {
+        const user = Array.isArray(group) ? group[0]?.User : null;
+        const name = user?.username || user?.name || "";
+        return String(name).toLowerCase() === normalized;
+      }
+    );
+
+    return res.status(200).json(filtered);
   } catch (err) {
     next(err);
   }
