@@ -9,6 +9,10 @@ export const notifyStaffOnTicketAssign = async ({
   room,
   assignedBy,
 }) => {
+  console.log("FCM staff assign: start", {
+    staffId,
+    roomId: room?._id?.toString(),
+  });
   // ✅ Save notification in DB
   const notification = await Notification.create({
     title: "Ticket Assigned to You",
@@ -25,11 +29,16 @@ export const notifyStaffOnTicketAssign = async ({
   // ✅ Send Firebase push
   const staff = await Admin.findById(staffId).select("fcmTokens");
 
+  console.log("FCM staff assign: tokens found", {
+    staffId,
+    tokenCount: staff?.fcmTokens?.length || 0,
+  });
+
   if (staff?.fcmTokens && staff.fcmTokens.length > 0) {
     const tokens = staff.fcmTokens.map((t) => t.token).filter(Boolean);
 
     if (tokens.length > 0) {
-      await firebaseAdmin.messaging().sendEachForMulticast(
+      const response = await firebaseAdmin.messaging().sendEachForMulticast(
         buildFcmMulticastMessage({
           tokens,
           title: notification.title,
@@ -40,6 +49,29 @@ export const notifyStaffOnTicketAssign = async ({
           },
         })
       );
+
+      console.log(
+        "FCM send result (staff assign):",
+        {
+          tokens: tokens.length,
+          success: response.successCount,
+          failed: response.failureCount,
+        }
+      );
+
+      if (response.failureCount > 0) {
+        const failed = response.responses
+          .map((r, i) => ({ r, token: tokens[i] }))
+          .filter((x) => !x.r.success);
+
+        console.warn(
+          "FCM send failed (staff assign):",
+          failed.map((f) => ({
+            token: f.token,
+            error: f.r.error?.code || f.r.error?.message,
+          }))
+        );
+      }
     }
   }
 

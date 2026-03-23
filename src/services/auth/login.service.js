@@ -60,13 +60,14 @@ export const loginUser = async ({
 
   user.refreshToken = refreshToken;
 
-  // 🔔 FCM TOKEN HANDLING
-  if (fcmToken && deviceId) {
+  // 🔔 FCM TOKEN HANDLING (store even if deviceId is missing)
+  if (fcmToken) {
+    const resolvedDeviceId = deviceId || `web_${fcmToken}`;
 
     if (!user.fcmTokens) user.fcmTokens = [];
 
     const existingDevice = user.fcmTokens.find(
-      (d) => d.deviceId === deviceId
+      (d) => d.deviceId === resolvedDeviceId
     );
 
     if (existingDevice) {
@@ -75,7 +76,7 @@ export const loginUser = async ({
     } else {
       user.fcmTokens.push({
         token: fcmToken,
-        deviceId,
+        deviceId: resolvedDeviceId,
         lastUsedAt: new Date(),
       });
     }

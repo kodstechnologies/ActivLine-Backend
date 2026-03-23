@@ -11,12 +11,14 @@ export const    login = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Email and password are required");
   }
 
-  // ✅ Auto-generate FCM Token & Device ID if missing (Helper for Postman/Testing)
-  if (!fcmToken) {
-    fcmToken = "mock_token_" + Date.now();
-  }
-  if (!deviceId) {
-    deviceId = "mock_device_" + Date.now();
+  // ✅ Auto-generate FCM Token & Device ID only in non-production (testing helper)
+  if (process.env.NODE_ENV !== "production") {
+    if (!fcmToken) {
+      fcmToken = "mock_token_" + Date.now();
+    }
+    if (!deviceId) {
+      deviceId = "mock_device_" + Date.now();
+    }
   }
 
   const result = await loginUser({ email, password, fcmToken, deviceId });
