@@ -1002,6 +1002,147 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
   }
 };
 
+export const getPaymentHistoryByCustomerId = async (req, res, next) => {
+  try {
+    const { customerId } = req.params;
+
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "customerId is required",
+      });
+    }
+
+    const customer = await Customer.findById(customerId)
+      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const planName = req.query.planName?.trim();
+    const status = req.query.status?.trim();
+    const date = req.query.date?.trim();
+    const fromDate = req.query.fromDate?.trim();
+    const toDate = req.query.toDate?.trim();
+    const profileId = req.query.profileId?.trim();
+
+    const baseQuery = buildCustomerOwnershipQuery(customer);
+    if (!baseQuery) {
+      return res.status(200).json({
+        success: true,
+        page,
+        limit,
+        total: 0,
+        totalPages: 0,
+        filters: {
+          planName: planName || null,
+          status: status || null,
+          date: date || null,
+          fromDate: fromDate || null,
+          toDate: toDate || null,
+          profileId: profileId || null,
+        },
+        summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+        data: [],
+      });
+    }
+
+    const query = { ...baseQuery };
+
+    if (planName) {
+      query.planName = { $regex: planName, $options: "i" };
+    }
+
+    if (profileId) {
+      query.profileId = String(profileId);
+    }
+
+    if (status) {
+      const upperStatus = status.toUpperCase();
+      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+        query.status = upperStatus;
+      }
+    }
+
+    if (date || fromDate || toDate) {
+      query.createdAt = {};
+      if (date) {
+        const start = new Date(date);
+        const end = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$gte = start;
+        query.createdAt.$lte = end;
+      } else {
+        if (fromDate) {
+          query.createdAt.$gte = new Date(fromDate);
+        }
+        if (toDate) {
+          const end = new Date(toDate);
+          end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total, summaryRows] = await Promise.all([
+      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const statusSummary = {
+      PENDING: 0,
+      SUCCESS: 0,
+      FAILED: 0,
+    };
+
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) {
+        statusSummary[row._id] = row.count;
+      }
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        planName: planName || null,
+        status: status || null,
+        date: date || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        profileId: profileId || null,
+      },
+      summary: statusSummary,
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
+        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+        return rest;
+      }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getMySinglePlanPaymentDetails = async (req, res, next) => {
   try {
     const customerId = req.user?._id;
