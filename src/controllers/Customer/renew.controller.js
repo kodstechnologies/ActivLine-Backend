@@ -1,6 +1,8 @@
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import { renewUserPlan } from "../../services/Customer/renew.service.js";
+import Customer from "../../models/Customer/customer.model.js";
+import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 
 // export const renew = asyncHandler(async (req, res) => {
 //   const payload = req.body || {};
@@ -65,6 +67,29 @@ export const renew = asyncHandler(async (req, res) => {
       : 500;
 
   const success = status === "success" || statusCode < 400;
+
+  if (success) {
+    try {
+      const customer = await Customer.findOne({
+        activlineUserId: String(userId),
+      }).select("_id userName accountId activlineUserId");
+
+      if (customer?.accountId) {
+        await notifyFranchiseAdmins({
+          accountId: customer.accountId,
+          title: "Plan Renewed",
+          message: `Customer ${customer.userName || "Unknown"} renewed a plan`,
+          data: {
+            customerId: customer._id?.toString() || null,
+            activlineUserId: customer.activlineUserId || null,
+            type: "PLAN_RENEW",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Franchise renew notification failed:", err?.message);
+    }
+  }
 
   return res.status(statusCode).json({
     success,

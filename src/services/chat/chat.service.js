@@ -10,6 +10,7 @@ import crypto from "crypto";
 import { notifyCustomer } from "../Notification/customer.notification.service.js";
 import CustomerNotification from "../../models/Notification/customernotification.model.js";
 import Notification from "../../models/Notification/notification.model.js";
+import { notifyFranchiseAdmins } from "../Notification/franchise.notification.service.js";
 /**
  * ===============================
  * ADMIN → FETCH ALL ROOMS
@@ -147,6 +148,25 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       },
     });
 
+    try {
+      const accountId = room.customer?.accountId || null;
+      if (accountId) {
+        await notifyFranchiseAdmins({
+          accountId,
+          title: "Ticket Closed",
+          message: `Ticket ${roomId} closed`,
+          data: {
+            ticketId: roomId,
+            status: "CLOSED",
+            customerId: room.customer?._id?.toString() || null,
+            type: "TICKET_STATUS",
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Franchise ticket notification failed:", err?.message);
+    }
+
     await Promise.all([
       ChatMessage.deleteMany({ roomId }),
       ChatRoom.deleteOne({ _id: roomId }),
@@ -208,6 +228,25 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       title: firstCustomerMsg?.message || "",
       message: "✅ Your issue has been resolved",
     });
+  }
+
+  try {
+    const accountId = room.customer?.accountId || null;
+    if (accountId) {
+      await notifyFranchiseAdmins({
+        accountId,
+        title: "Ticket Status Updated",
+        message: `Ticket ${roomId} status changed to ${newStatus}`,
+        data: {
+          ticketId: roomId,
+          status: newStatus,
+          customerId: room.customer?._id?.toString() || null,
+          type: "TICKET_STATUS",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("Franchise ticket notification failed:", err?.message);
   }
 
   return updatedRoom;

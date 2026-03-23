@@ -11,10 +11,13 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
   const customerId = req.user._id;
 
   // 🔹 Page from query (default = 1)
-  const page = parseInt(req.query.page) || 1;
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
-  // ✅ FIXED LIMIT
-  const limit = 20;
+  // ✅ Configurable limit (max 100)
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit, 10) || 20, 1),
+    100
+  );
   const skip = (page - 1) * limit;
 
   // 🔹 Fetch data + total count

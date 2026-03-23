@@ -1,14 +1,11 @@
-// src/controllers/staff/staff.notification.controller.js
 import Notification from "../../models/Notification/notification.model.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 
 /**
- * =========================
- * GET MY NOTIFICATIONS
- * =========================
+ * GET my franchise notifications
  */
-export const getMyStaffNotifications = asyncHandler(async (req, res) => {
+export const getMyFranchiseNotifications = asyncHandler(async (req, res) => {
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
   const limit = Math.min(
     Math.max(parseInt(req.query.limit, 10) || 20, 1),
@@ -18,7 +15,7 @@ export const getMyStaffNotifications = asyncHandler(async (req, res) => {
 
   const filter = {
     recipientUser: req.user._id,
-    recipientRole: "ADMIN_STAFF",
+    recipientRole: "FRANCHISE_ADMIN",
   };
 
   const [notifications, total] = await Promise.all([
@@ -41,16 +38,11 @@ export const getMyStaffNotifications = asyncHandler(async (req, res) => {
 });
 
 /**
- * =========================
- * MARK ONE AS READ
- * =========================
+ * MARK one as read
  */
-export const markStaffNotificationRead = asyncHandler(async (req, res) => {
+export const markFranchiseNotificationRead = asyncHandler(async (req, res) => {
   await Notification.findOneAndUpdate(
-    {
-      _id: req.params.id,
-      recipientUser: req.user._id,
-    },
+    { _id: req.params.id, recipientUser: req.user._id },
     { isRead: true }
   );
 
@@ -58,29 +50,27 @@ export const markStaffNotificationRead = asyncHandler(async (req, res) => {
 });
 
 /**
- * =========================
- * MARK ALL AS READ
- * =========================
+ * MARK all as read
  */
-export const markAllStaffNotificationsRead = asyncHandler(async (req, res) => {
-  await Notification.updateMany(
-    {
-      recipientUser: req.user._id,
-      recipientRole: "ADMIN_STAFF",
-      isRead: false,
-    },
-    { isRead: true }
-  );
+export const markAllFranchiseNotificationsRead = asyncHandler(
+  async (req, res) => {
+    await Notification.updateMany(
+      {
+        recipientUser: req.user._id,
+        recipientRole: "FRANCHISE_ADMIN",
+        isRead: false,
+      },
+      { isRead: true }
+    );
 
-  res.json(ApiResponse.success(null, "All notifications marked as read"));
-});
+    res.json(ApiResponse.success(null, "All notifications marked as read"));
+  }
+);
 
 /**
- * =========================
- * DELETE ONE
- * =========================
+ * DELETE one
  */
-export const deleteStaffNotification = asyncHandler(async (req, res) => {
+export const deleteFranchiseNotification = asyncHandler(async (req, res) => {
   await Notification.findOneAndDelete({
     _id: req.params.id,
     recipientUser: req.user._id,
@@ -90,31 +80,26 @@ export const deleteStaffNotification = asyncHandler(async (req, res) => {
 });
 
 /**
- * =========================
- * DELETE ALL
- * =========================
+ * DELETE all
  */
-export const deleteAllStaffNotifications = asyncHandler(async (req, res) => {
+export const deleteAllFranchiseNotifications = asyncHandler(async (req, res) => {
   await Notification.deleteMany({
     recipientUser: req.user._id,
-    recipientRole: "ADMIN_STAFF",
+    recipientRole: "FRANCHISE_ADMIN",
   });
 
   res.json(ApiResponse.success(null, "All notifications deleted"));
 });
+
 /**
- * =========================
- * GET UNREAD COUNT
- * =========================
+ * GET unread count
  */
-export const getStaffUnreadCount = asyncHandler(async (req, res) => {
+export const getFranchiseUnreadCount = asyncHandler(async (req, res) => {
   const unreadCount = await Notification.countDocuments({
     recipientUser: req.user._id,
-    recipientRole: "ADMIN_STAFF",
+    recipientRole: "FRANCHISE_ADMIN",
     isRead: false,
   });
 
-  res.json(
-    ApiResponse.success({ unreadCount })
-  );
+  res.json(ApiResponse.success({ unreadCount }));
 });

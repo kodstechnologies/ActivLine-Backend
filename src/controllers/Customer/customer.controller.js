@@ -11,6 +11,7 @@ import ApiError from "../../utils/ApiError.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import { sendCustomerWelcomeEmail } from "../../utils/mail.util.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
+import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 
 /**
  * @description Get all customers with filtering, searching, and pagination
@@ -202,6 +203,19 @@ export const createCustomer = asyncHandler(async (req, res) => {
       createdByRole: req.user?.role || "CUSTOMER",
     },
   });
+  try {
+    await notifyFranchiseAdmins({
+      accountId: result.customer?.accountId || null,
+      title: "New Customer Created",
+      message: `Customer ${result.customer?.userName || "Unknown"} created`,
+      data: {
+        customerId: result.customer?._id?.toString() || null,
+        activlineUserId: result.customer?.activlineUserId || null,
+      },
+    });
+  } catch (err) {
+    console.error("Franchise notification failed:", err?.message);
+  }
 
   return res.status(201).json(
     ApiResponse.success(
@@ -256,8 +270,22 @@ export const updateCustomer = asyncHandler(async (req, res) => {
       updatedFields: Object.keys(req.body || {}),
     },
   });
+  try {
+    await notifyFranchiseAdmins({
+      accountId: result.customer?.accountId || null,
+      title: "New Customer Created",
+      message: `Customer ${result.customer?.userName || "Unknown"} created`,
+      data: {
+        customerId: result.customer?._id?.toString() || null,
+        activlineUserId: result.customer?.activlineUserId || null,
+      },
+    });
+  } catch (err) {
+    console.error("Franchise notification failed:", err?.message);
+  }
 
   return res
     .status(200)
     .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
 });
+

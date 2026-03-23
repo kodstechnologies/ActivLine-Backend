@@ -10,15 +10,37 @@ import { getNotificationsForRole } from "../../services/Notification/notificatio
 export const getNotifications = asyncHandler(async (req, res) => {
   const { _id, role } = req.user;
 
-  const notifications = await Notification.find({
-    recipientRole: role,          // ✅ role-based filter
-    recipientUser: _id,           // ✅ user-specific filter (important)
-  }).sort({ createdAt: -1 });
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit, 10) || 20, 1),
+    100
+  );
+  const skip = (page - 1) * limit;
+
+  const filter = {
+    recipientRole: role,
+    recipientUser: _id,
+  };
+
+  const [notifications, total] = await Promise.all([
+    Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Notification.countDocuments(filter),
+  ]);
 
   res.status(200).json(
     ApiResponse.success(
       notifications,
-      "Notifications fetched successfully"
+      "Notifications fetched successfully",
+      {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: page * limit < total,
+      }
     )
   );
 });
