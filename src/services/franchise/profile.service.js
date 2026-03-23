@@ -112,7 +112,13 @@ export const fetchProfilesByFranchise = async (accountId, options = {}) => {
 };
 
 export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {}) => {
-  const base = await fetchProfilesByFranchise(accountId, options);
+  const baseOptions = { ...options };
+  const shouldFilterByDetailsType = Boolean(options.typeFromDetails && options.type);
+  if (shouldFilterByDetailsType) {
+    // defer type filtering until after details are loaded
+    delete baseOptions.type;
+  }
+  const base = await fetchProfilesByFranchise(accountId, baseOptions);
 
   const getProfileId = (entry) => {
     const profile = entry?.Profile || entry || {};
@@ -278,6 +284,26 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
     return sanitizeDetails(base);
   };
 
+  const resolvePackageType = (details) => {
+    const normalized = normalizeDetails(details);
+    const profileDetails =
+      normalized?.["profile Details"] ||
+      normalized?.["profile details"] ||
+      normalized?.profileDetails ||
+      normalized?.profile_details ||
+      [];
+
+    if (!Array.isArray(profileDetails)) return null;
+
+    const row = profileDetails.find(
+      (item) =>
+        String(item?.property || "").toLowerCase().trim() === "package type"
+    );
+
+    const value = String(row?.value || "").trim().toLowerCase();
+    return value || null;
+  };
+
   const groupMapping = await resolveGroupMapping();
   const getGroupIdForProfile = (profileId) => {
     const normalizedProfileId = normalizeText(profileId);
@@ -301,6 +327,21 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
     const details = profileId
       ? await fetchProfileDetails(accountId, profileId)
       : null;
+
+    if (shouldFilterByDetailsType) {
+      const typeFilters = String(options.type || "")
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean);
+      const packageType = resolvePackageType(details);
+      if (typeFilters.length > 0 && !typeFilters.includes(packageType)) {
+        return {
+          ...base,
+          item: null,
+          total: 0,
+        };
+      }
+    }
 
     return {
       ...base,
@@ -332,6 +373,36 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
       };
     })
   );
+
+  if (shouldFilterByDetailsType) {
+    const typeFilters = String(options.type || "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    const filtered = itemsWithDetails.filter((entry) => {
+      const packageType = resolvePackageType(entry.details);
+      return typeFilters.length === 0 || typeFilters.includes(packageType);
+    });
+
+    const page = toPositiveInt(options.page, 1);
+    const limit = Math.min(toPositiveInt(options.limit, 20), 200);
+    const total = filtered.length;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const skip = (page - 1) * limit;
+    const items = filtered.slice(skip, skip + limit);
+
+    return {
+      isSingle: false,
+      items,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    };
+  }
 
   return {
     ...base,

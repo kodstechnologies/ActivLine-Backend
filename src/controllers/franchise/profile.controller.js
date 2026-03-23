@@ -24,6 +24,7 @@ export const getProfiles = async (req, res) => {
       search,
       type,
       profileId,
+      typeFromDetails: includeDetails && Boolean(type),
     });
 
     if (result.isSingle) {

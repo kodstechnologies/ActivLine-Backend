@@ -205,6 +205,8 @@ const normalizeText = (value) => {
   return text || null;
 };
 
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const resolvePlanNameFromDetails = (planDetails, fallback) => {
   if (!planDetails || typeof planDetails !== "object") return fallback;
 
@@ -1687,6 +1689,7 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     const search = req.query.search?.trim();
 
     const query = {};
+    let resolvedUserName = userName || null;
 
     const resolvedAccountId = accountId || franchise || null;
 
@@ -1702,9 +1705,6 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     if (planName) {
       query.planName = { $regex: planName, $options: "i" };
     }
-    if (userName) {
-      query.paidByUserName = { $regex: userName, $options: "i" };
-    }
 
     if (search) {
       const searchRegex = new RegExp(search, "i");
@@ -1717,6 +1717,81 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
         { razorpayOrderId: { $regex: searchRegex } },
         { razorpayPaymentId: { $regex: searchRegex } },
       ];
+    }
+
+    if (userName) {
+      const customers = await Customer.find({
+        userName: { $regex: `^${escapeRegex(userName)}$`, $options: "i" },
+      })
+        .select("accountId userGroupId activlineUserId userName")
+        .lean();
+
+      if (!customers.length) {
+        return res.status(200).json({
+          success: true,
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+          filters: {
+            accountId: resolvedAccountId || null,
+            franchise: franchise || null,
+            groupId: groupId || null,
+            profileId: profileId || null,
+            planName: planName || null,
+            status: status || null,
+            date: date || null,
+            fromDate: fromDate || null,
+            toDate: toDate || null,
+            userName,
+            search: search || null,
+          },
+          summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+          data: [],
+        });
+      }
+
+      const identitySet = new Set();
+      for (const customer of customers) {
+        const ids = buildCustomerIdentitySet(customer);
+        ids.forEach((id) => identitySet.add(String(id)));
+      }
+
+      const ids = Array.from(identitySet);
+      if (!ids.length) {
+        return res.status(200).json({
+          success: true,
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+          filters: {
+            accountId: resolvedAccountId || null,
+            franchise: franchise || null,
+            groupId: groupId || null,
+            profileId: profileId || null,
+            planName: planName || null,
+            status: status || null,
+            date: date || null,
+            fromDate: fromDate || null,
+            toDate: toDate || null,
+            userName,
+            search: search || null,
+          },
+          summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+          data: [],
+        });
+      }
+
+      resolvedUserName = customers[0]?.userName || userName;
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { accountId: { $in: ids } },
+          { groupId: { $in: ids } },
+          { profileId: { $in: ids } },
+        ],
+      });
     }
 
     if (status) {
@@ -1748,6 +1823,57 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     }
 
     const skip = (page - 1) * limit;
+
+    if (userName) {
+      const allItems = await PaymentHistory.find(query).sort({ createdAt: -1 });
+      const resolveCustomer = await buildCustomerResolver(allItems);
+      const normalizedFilter = String(userName).toLowerCase();
+
+      const mappedItems = allItems
+        .map((item) => {
+          const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+          const doc = item?.toObject ? item.toObject() : item || {};
+          const mappedUserName =
+            doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+          return { item, mapped, mappedUserName };
+        })
+        .filter((entry) => String(entry.mappedUserName || "").toLowerCase() === normalizedFilter);
+
+      const statusSummary = { PENDING: 0, SUCCESS: 0, FAILED: 0 };
+      for (const entry of mappedItems) {
+        const status = entry.mapped?.status;
+        if (statusSummary[status] !== undefined) statusSummary[status] += 1;
+      }
+
+      const total = mappedItems.length;
+      const paged = mappedItems.slice(skip, skip + limit);
+
+      return res.status(200).json({
+        success: true,
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        filters: {
+          accountId: resolvedAccountId || null,
+          franchise: franchise || null,
+          groupId: groupId || null,
+          profileId: profileId || null,
+          planName: planName || null,
+          status: status || null,
+          date: date || null,
+          fromDate: fromDate || null,
+          toDate: toDate || null,
+          userName: resolvedUserName || null,
+          search: search || null,
+        },
+        summary: statusSummary,
+        data: paged.map(({ mapped, mappedUserName }) => {
+          const { customer, paidBy, plan, ...rest } = mapped || {};
+          return { ...rest, userName: mappedUserName || null };
+        }),
+      });
+    }
 
     const [items, total, summaryRows] = await Promise.all([
       PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -1788,7 +1914,7 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
         date: date || null,
         fromDate: fromDate || null,
         toDate: toDate || null,
-        userName: userName || null,
+        userName: resolvedUserName || null,
         search: search || null,
       },
       summary: statusSummary,
