@@ -12,6 +12,14 @@ import ApiResponse from "../../utils/ApiReponse.js";
 import { sendCustomerWelcomeEmail } from "../../utils/mail.util.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
+import PaymentHistory from "../../models/payment/paymentHistory.model.js";
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const normalizeText = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text || null;
+};
 
 /**
  * @description Get all customers with filtering, searching, and pagination
@@ -221,6 +229,118 @@ export const createCustomer = asyncHandler(async (req, res) => {
     ApiResponse.success(
       null,
       "Your account is created in ActivLine"
+    )
+  );
+});
+
+/**
+ * @description Get full customer overview by username (details, payments, tickets)
+ * @route GET /api/customer/customers/username/:userName/overview
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
+  const userNameParam = normalizeText(req.params.userName);
+  if (!userNameParam) {
+    throw new ApiError(400, "userName is required");
+  }
+
+  const customer = await Customer.findOne({
+    userName: { $regex: `^${escapeRegex(userNameParam)}$`, $options: "i" },
+  }).select("-password -rawPayload");
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (req.user?.role === "FRANCHISE_ADMIN" && customer.accountId !== req.user.accountId) {
+    throw new ApiError(403, "Access Denied. You can only view customers from your franchise.");
+  }
+
+  const paymentPage = parseInt(req.query.paymentPage || req.query.page || 1, 10);
+  const paymentLimit = Math.min(parseInt(req.query.paymentLimit || req.query.limit || 10, 10), 100);
+  const ticketLimit = Math.min(parseInt(req.query.ticketLimit || 10, 10), 100);
+
+  const paymentFilters = {
+    $or: [
+      customer.accountId ? { accountId: String(customer.accountId) } : null,
+      customer.userGroupId ? { groupId: String(customer.userGroupId) } : null,
+      customer.activlineUserId ? { profileId: String(customer.activlineUserId) } : null,
+    ].filter(Boolean),
+  };
+
+  const paymentSkip = (Math.max(paymentPage, 1) - 1) * Math.max(paymentLimit, 1);
+
+  const [payments, paymentTotal, ticketRooms, ticketStatusCounts] = await Promise.all([
+    paymentFilters.$or.length
+      ? PaymentHistory.find(paymentFilters)
+          .sort({ createdAt: -1 })
+          .skip(paymentSkip)
+          .limit(paymentLimit)
+      : Promise.resolve([]),
+    paymentFilters.$or.length
+      ? PaymentHistory.countDocuments(paymentFilters)
+      : Promise.resolve(0),
+    ChatRoom.find({ customer: customer._id })
+      .select(
+        "_id status createdAt updatedAt lastMessage lastMessageAt assignedStaff assignedFranchiseAdmin"
+      )
+      .populate("assignedStaff", "name email")
+      .populate("assignedFranchiseAdmin", "name email accountId role status")
+      .sort({ updatedAt: -1 })
+      .limit(ticketLimit),
+    ChatRoom.aggregate([
+      { $match: { customer: customer._id } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
+  ]);
+
+  const ticketSummary = {
+    OPEN: 0,
+    ASSIGNED: 0,
+    IN_PROGRESS: 0,
+    RESOLVED: 0,
+    CLOSED: 0,
+  };
+  ticketStatusCounts.forEach((row) => {
+    if (ticketSummary[row._id] !== undefined) {
+      ticketSummary[row._id] = row.count;
+    }
+  });
+
+  return res.json(
+    ApiResponse.success(
+      {
+        customer,
+        paymentHistory: {
+          page: Math.max(paymentPage, 1),
+          limit: Math.max(paymentLimit, 1),
+          total: paymentTotal,
+          totalPages: paymentTotal === 0 ? 0 : Math.ceil(paymentTotal / paymentLimit),
+          data: payments.map((item) => ({
+            paymentId: String(item._id),
+            orderId: item.razorpayOrderId || null,
+            razorpayPaymentId: item.razorpayPaymentId || null,
+            status: item.status,
+            isPaid: item.status === "SUCCESS",
+            amount: item.planAmount,
+            currency: item.currency,
+            groupId: item.groupId,
+            accountId: item.accountId,
+            profileId: item.profileId,
+            planName: item.planName,
+            paidAt: item.paidAt || null,
+            createdAt: item.createdAt || null,
+            updatedAt: item.updatedAt || null,
+            userName: customer.userName || null,
+          })),
+        },
+        tickets: {
+          summary: ticketSummary,
+          count: ticketRooms.length,
+          data: ticketRooms,
+        },
+      },
+      "Customer overview fetched successfully"
     )
   );
 });

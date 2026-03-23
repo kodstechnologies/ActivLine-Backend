@@ -3,6 +3,7 @@ import {
   createCustomer,
   getCustomers,
   getCustomerById,
+  getCustomerOverviewByUserName,
   updateCustomer,
 } from "../../controllers/Customer/customer.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
@@ -35,6 +36,13 @@ router.post(
 router
   .route("/customers")
   .get(verifyJWT, allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"), getCustomers);
+
+router.get(
+  "/customers/username/:userName/overview",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  getCustomerOverviewByUserName
+);
 
 // This new route handles fetching a single customer by their ID
 router
