@@ -26,3 +26,11 @@ export const getProfileDetailsFromActivline = async (profileId) => {
 
   return response.data;
 };
+
+export const getLogoffTimeOnlineStatusFromActivline = async (userId) => {
+  const response = await activlineClient.get(
+    `/get_logofftime_onlinestatus/${userId}`
+  );
+
+  return response.data;
+};

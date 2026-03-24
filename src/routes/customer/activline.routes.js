@@ -3,8 +3,9 @@ import express from "express";
 import {
   getFilteredUsers,
   getProfileDetails,
+  getLogoffTimeOnlineStatus,
 } from "../../controllers/Customer/activline.controller.js";
-import { allowRolesExceptCustomer } from "../../middlewares/role.middleware.js";
+import { allowRoles, allowRolesExceptCustomer } from "../../middlewares/role.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 
 const router = express.Router();
@@ -21,6 +22,20 @@ router.get(
   verifyJWT,
   allowRolesExceptCustomer,
   getProfileDetails
+);
+
+router.get(
+  "/activline/logoff-status/:userId",
+  verifyJWT,
+  allowRoles(
+    "CUSTOMER",
+    "ADMIN",
+    "SUPER_ADMIN",
+    "ADMIN_STAFF",
+    "FRANCHISE_ADMIN",
+    "STAFF"
+  ),
+  getLogoffTimeOnlineStatus
 );
 
 export default router;
