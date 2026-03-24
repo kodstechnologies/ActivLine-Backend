@@ -3,6 +3,7 @@ import {
   createCustomer,
   getCustomers,
   getCustomerById,
+  getCustomerCityById,
   getCustomerOverviewByUserName,
   updateCustomer,
   updateCustomerByIdForFranchise,
@@ -31,6 +32,7 @@ const maybeUploadCustomerFiles = (req, res, next) => {
       { name: "reportFile", maxCount: 1 },
       { name: "signFile", maxCount: 1 },
       { name: "profilePicFile", maxCount: 1 },
+      { name: "profileImage", maxCount: 1 },
     ])(req, res, next);
   }
   return next();
@@ -68,6 +70,13 @@ router.get(
 router
   .route("/customers/:customerId")
   .get(verifyJWT, allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"), getCustomerById);
+
+router.get(
+  "/customers/:customerId/city",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+  getCustomerCityById
+);
 
 // Update customer by Activline userId
 router.post(

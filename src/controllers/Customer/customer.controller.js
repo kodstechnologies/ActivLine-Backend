@@ -151,6 +151,59 @@ export const getCustomerById = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @description Get a single customer's city by their ID
+ * @route GET /api/customer/customers/:customerId/city
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN, ADMIN_STAFF)
+ */
+export const getCustomerCityById = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+
+  const isObjectId = mongoose.Types.ObjectId.isValid(customerId);
+  const customer = isObjectId
+    ? await Customer.findById(customerId).select(
+        "_id accountId address installationAddress activlineUserId"
+      )
+    : await Customer.findOne({ activlineUserId: customerId }).select(
+        "_id accountId address installationAddress activlineUserId"
+      );
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (req.user?.role === "FRANCHISE_ADMIN" && customer.accountId !== req.user.accountId) {
+    throw new ApiError(403, "Access Denied. You can only view customers from your franchise.");
+  }
+
+  if (req.user?.role === "ADMIN_STAFF") {
+    const assigned = await ChatRoom.exists({
+      assignedStaff: req.user._id,
+      customer: customer._id,
+    });
+
+    if (!assigned) {
+      throw new ApiError(403, "Access Denied. You can only view customers assigned to you.");
+    }
+  }
+
+  const city =
+    customer.address?.city ||
+    customer.installationAddress?.city ||
+    null;
+
+  return res.status(200).json(
+    ApiResponse.success(
+      {
+        customerId: customer._id,
+        activlineUserId: customer.activlineUserId || null,
+        city,
+      },
+      "Customer city fetched successfully"
+    )
+  );
+});
+
+/**
  * @description Create a new customer
  * @route POST /api/customer/create
  * @access Public (or Admin if protected by route middleware)
@@ -495,8 +548,8 @@ export const getCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   return res.status(200).json(
     ApiResponse.success(
       {
-       
-        lastDate: customer.maintenance?.lastDate || null,
+        customerId: customer._id,
+        firstDate: customer.maintenance?.lastDate || null,
         endDate: customer.maintenance?.endDate || null,
       },
       "Customer maintenance dates fetched successfully"
@@ -544,7 +597,7 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   if (endDate !== undefined) update["maintenance.endDate"] = endDate;
 
   const updatedCustomer = await Customer.findByIdAndUpdate(
-  
+    customerId,
     { $set: update },
     { new: true }
   ).select("_id maintenance");
@@ -552,8 +605,8 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   return res.status(200).json(
     ApiResponse.success(
       {
-       
-        lastDate: updatedCustomer.maintenance?.lastDate || null,
+        customerId: updatedCustomer._id,
+        firstDate: updatedCustomer.maintenance?.lastDate || null,
         endDate: updatedCustomer.maintenance?.endDate || null,
       },
       "Customer maintenance dates updated successfully"
@@ -592,7 +645,7 @@ export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   }
 
   const updatedCustomer = await Customer.findByIdAndUpdate(
-
+    customerId,
     { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
     { new: true }
   ).select("_id maintenance");
@@ -600,8 +653,8 @@ export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   return res.status(200).json(
     ApiResponse.success(
       {
-        
-        lastDate: updatedCustomer.maintenance?.lastDate || null,
+        customerId: updatedCustomer._id,
+        firstDate: updatedCustomer.maintenance?.lastDate || null,
         endDate: updatedCustomer.maintenance?.endDate || null,
       },
       "Customer maintenance dates deleted successfully"
@@ -650,9 +703,9 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
     return res.status(200).json(
       ApiResponse.success(
         {
-          
+          customerId: customer._id,
           accountId: customer.accountId,
-          lastDate: customer.maintenance?.lastDate || null,
+          firstDate: customer.maintenance?.lastDate || null,
           endDate: customer.maintenance?.endDate || null,
         },
         "Customer maintenance dates fetched successfully"
@@ -717,9 +770,9 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
     return res.status(200).json(
       ApiResponse.success(
         {
-         
+          customerId: updatedCustomer._id,
           accountId: updatedCustomer.accountId,
-          lastDate: updatedCustomer.maintenance?.lastDate || null,
+          firstDate: updatedCustomer.maintenance?.lastDate || null,
           endDate: updatedCustomer.maintenance?.endDate || null,
         },
         "Customer maintenance dates updated successfully"
@@ -775,9 +828,9 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
     return res.status(200).json(
       ApiResponse.success(
         {
-         
+          customerId: updatedCustomer._id,
           accountId: updatedCustomer.accountId,
-          lastDate: updatedCustomer.maintenance?.lastDate || null,
+          firstDate: updatedCustomer.maintenance?.lastDate || null,
           endDate: updatedCustomer.maintenance?.endDate || null,
         },
         "Customer maintenance dates deleted successfully"
@@ -851,3 +904,6 @@ export const deleteMyProfileImage = asyncHandler(async (req, res) => {
     .status(200)
     .json(ApiResponse.success(null, "Profile image deleted successfully"));
 });
+
+
+

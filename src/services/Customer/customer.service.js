@@ -19,6 +19,52 @@ import { uploadOnCloudinary,deleteFromCloudinary } from "../../utils/cloudinary.
 // import { createCustomer } from "../../repositories/Customer/customer.repository.js";
 import Customer from "../../models/Customer/customer.model.js";
 
+const uploadCustomerDocumentsForUpdate = async (files) => {
+  const documentUrls = {};
+  const uploadedFilePaths = [];
+  const uploadPromises = [];
+  const fileTypes = [
+    "idFile",
+    "addressFile",
+    "cafFile",
+    "reportFile",
+    "signFile",
+    "profilePicFile",
+    "profileImage",
+  ];
+
+  for (const fileType of fileTypes) {
+    if (files?.[fileType]?.[0]?.path) {
+      const filePath = files[fileType][0].path;
+      if (!uploadedFilePaths.includes(filePath)) {
+        uploadedFilePaths.push(filePath);
+      }
+      uploadPromises.push(
+        uploadOnCloudinary(filePath).then((result) => {
+          if (result) {
+            documentUrls[fileType] = result.secure_url;
+          }
+        })
+      );
+    }
+  }
+
+  await Promise.all(uploadPromises);
+
+  if (documentUrls.profileImage && !documentUrls.profilePicFile) {
+    documentUrls.profilePicFile = documentUrls.profileImage;
+  }
+  delete documentUrls.profileImage;
+
+  uploadedFilePaths.forEach((filePath) => {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  });
+
+  return documentUrls;
+};
+
 
 
 
@@ -180,7 +226,7 @@ export const createCustomerService = async (payload, files) => {
   // 🔹 NEW: Upload all files to Cloudinary
   const documentUrls = {};
   const uploadPromises = [];
-  const fileTypes = ['idFile', 'addressFile', 'cafFile', 'reportFile', 'signFile', 'profilePicFile'];
+  const fileTypes = ['idFile', 'addressFile', 'cafFile', 'reportFile', 'signFile', 'profilePicFile', 'profileImage'];
 
   for (const fileType of fileTypes) {
     if (files?.[fileType]?.[0]?.path) {
@@ -200,6 +246,10 @@ export const createCustomerService = async (payload, files) => {
 
   // Wait for all Cloudinary uploads to finish
   await Promise.all(uploadPromises);
+  if (documentUrls.profileImage && !documentUrls.profilePicFile) {
+    documentUrls.profilePicFile = documentUrls.profileImage;
+  }
+  delete documentUrls.profileImage;
 
   // 🔹 3. Validate referral code if user used one
   let referrer = null;
@@ -580,6 +630,13 @@ export const updateCustomerService = async (
 
   console.log("✅ MongoDB updateData:", updateData); // DEBUG
 
+  const documentUrls = await uploadCustomerDocumentsForUpdate(files);
+  Object.entries(documentUrls).forEach(([key, value]) => {
+    if (value) {
+      updateData["documents." + key] = value;
+    }
+  });
+
   // 4️⃣ UPDATE MONGODB
   const updatedCustomer = await updateCustomerRepo(
     activlineUserId,
@@ -812,3 +869,4 @@ export const deleteProfileImageService = async (userId) => {
   customer.documents.profilePicFile = null;
   await customer.save();
 };
+
