@@ -204,10 +204,18 @@ export const createCustomerService = async (payload, files) => {
   // 🔹 3. Validate referral code if user used one
   let referrer = null;
   const referralCodeRaw = payload.referralCode;
-  const referralCode =
+  let referralCode =
     referralCodeRaw === undefined || referralCodeRaw === null
       ? ""
       : String(referralCodeRaw).trim();
+
+  // Treat common placeholder strings as empty (frontend sometimes sends these)
+  if (referralCode) {
+    const lowered = referralCode.toLowerCase();
+    if (["null", "undefined", "na", "n/a"].includes(lowered)) {
+      referralCode = "";
+    }
+  }
 
   if (referralCode) {
     referrer = await Customer.findOne({
