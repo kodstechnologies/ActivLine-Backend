@@ -42,20 +42,25 @@ export const getUserByPhoneDetails = async (req, res, next) => {
 
     const response = await getUserByPhoneRaw(phone);
 
-    if (!username) {
-      return res.status(200).json(response);
-    }
+    const groups = Array.isArray(response) ? response : [];
 
-    const normalized = String(username).trim().toLowerCase();
-    const filtered = (Array.isArray(response) ? response : []).filter(
-      (group) => {
-        const user = Array.isArray(group) ? group[0]?.User : null;
-        const name = user?.username || user?.name || "";
-        return String(name).toLowerCase() === normalized;
-      }
-    );
+    const filtered = username
+      ? groups.filter((group) => {
+          const user = Array.isArray(group) ? group[0]?.User : null;
+          const name = user?.username || user?.name || "";
+          return String(name).toLowerCase() === String(username).trim().toLowerCase();
+        })
+      : groups;
 
-    return res.status(200).json(filtered);
+    const extracted = (filtered || [])
+      .map((group) => {
+        if (!Array.isArray(group)) return null;
+        const item = group.find((entry) => entry?.currentBillingCycleUsage);
+        return item || null;
+      })
+      .filter(Boolean);
+
+    return res.status(200).json({ data: extracted });
   } catch (err) {
     next(err);
   }
