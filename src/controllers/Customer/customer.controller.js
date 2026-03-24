@@ -5,6 +5,9 @@ import { createCustomerSchema } from "../../validations/Customer/customer.valida
 import {
   createCustomerService,
   updateCustomerService,
+  getProfileImageService,
+  updateProfileImageService,
+  deleteProfileImageService,
 } from "../../services/Customer/customer.service.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
@@ -783,3 +786,68 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
   }
 );
 
+/**
+ * @description Get profile image for the authenticated customer
+ * @route GET /api/customer/me/profile-image
+ * @access Private (CUSTOMER)
+ */
+export const getMyProfileImage = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "User ID not found in token");
+  }
+
+  const data = await getProfileImageService(userId);
+
+  return res
+    .status(200)
+    .json(ApiResponse.success(data, "Profile image fetched successfully"));
+});
+
+/**
+ * @description Update profile image for the authenticated customer
+ * @route PUT /api/customer/me/profile-image
+ * @access Private (CUSTOMER)
+ */
+export const updateMyProfileImage = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "User ID not found in token");
+  }
+
+  const file =
+    req.file ||
+    req.files?.profilePicFile?.[0] ||
+    req.files?.profileImage?.[0];
+
+  if (!file) {
+    throw new ApiError(400, "profilePicFile is required");
+  }
+
+  const data = await updateProfileImageService(userId, file);
+
+  return res
+    .status(200)
+    .json(ApiResponse.success(data, "Profile image updated successfully"));
+});
+
+/**
+ * @description Delete profile image for the authenticated customer
+ * @route DELETE /api/customer/me/profile-image
+ * @access Private (CUSTOMER)
+ */
+export const deleteMyProfileImage = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "User ID not found in token");
+  }
+
+  await deleteProfileImageService(userId);
+
+  return res
+    .status(200)
+    .json(ApiResponse.success(null, "Profile image deleted successfully"));
+});

@@ -12,6 +12,9 @@ import {
   getCustomerMaintenanceDatesByAccountId,
   upsertCustomerMaintenanceDatesByAccountId,
   deleteCustomerMaintenanceDatesByAccountId,
+  getMyProfileImage,
+  updateMyProfileImage,
+  deleteMyProfileImage,
 } from "../../controllers/Customer/customer.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
@@ -28,6 +31,16 @@ const maybeUploadCustomerFiles = (req, res, next) => {
       { name: "reportFile", maxCount: 1 },
       { name: "signFile", maxCount: 1 },
       { name: "profilePicFile", maxCount: 1 },
+    ])(req, res, next);
+  }
+  return next();
+};
+
+const maybeUploadProfileImage = (req, res, next) => {
+  if (req.is("multipart/form-data")) {
+    return upload.fields([
+      { name: "profilePicFile", maxCount: 1 },
+      { name: "profileImage", maxCount: 1 },
     ])(req, res, next);
   }
   return next();
@@ -127,6 +140,28 @@ router.delete(
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
   deleteCustomerMaintenanceDatesByAccountId
+);
+
+router.get(
+  "/me/profile-image",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getMyProfileImage
+);
+
+router.put(
+  "/me/profile-image",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  maybeUploadProfileImage,
+  updateMyProfileImage
+);
+
+router.delete(
+  "/me/profile-image",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  deleteMyProfileImage
 );
 
 export default router;
