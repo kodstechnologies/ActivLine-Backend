@@ -226,6 +226,14 @@ const customerSchema = new mongoose.Schema(
     },
 
     /* =================================
+       🔹 MAINTENANCE DATES
+    ================================= */
+    maintenance: {
+      lastDate: String,
+      endDate: String,
+    },
+
+    /* =================================
        🔹 REFERRAL
     ================================= */
  referral: {

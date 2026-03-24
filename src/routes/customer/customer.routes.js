@@ -5,6 +5,13 @@ import {
   getCustomerById,
   getCustomerOverviewByUserName,
   updateCustomer,
+  updateCustomerByIdForFranchise,
+  getCustomerMaintenanceDates,
+  upsertCustomerMaintenanceDates,
+  deleteCustomerMaintenanceDates,
+  getCustomerMaintenanceDatesByAccountId,
+  upsertCustomerMaintenanceDatesByAccountId,
+  deleteCustomerMaintenanceDatesByAccountId,
 } from "../../controllers/Customer/customer.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
@@ -56,6 +63,70 @@ router.post(
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
   maybeUploadCustomerFiles,
   updateCustomer
+);
+
+router.patch(
+  "/customers/:customerId/franchise-edit",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  maybeUploadCustomerFiles,
+  updateCustomerByIdForFranchise
+);
+
+router.get(
+  "/customers/:customerId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  getCustomerMaintenanceDates
+);
+
+router.post(
+  "/customers/:customerId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  upsertCustomerMaintenanceDates
+);
+
+router.patch(
+  "/customers/:customerId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  upsertCustomerMaintenanceDates
+);
+
+router.delete(
+  "/customers/:customerId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  deleteCustomerMaintenanceDates
+);
+
+router.get(
+  "/customers/account/:accountId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
+  getCustomerMaintenanceDatesByAccountId
+);
+
+router.post(
+  "/customers/account/:accountId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
+  upsertCustomerMaintenanceDatesByAccountId
+);
+
+router.patch(
+  "/customers/account/:accountId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
+  upsertCustomerMaintenanceDatesByAccountId
+);
+
+router.delete(
+  "/customers/account/:accountId/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
+  deleteCustomerMaintenanceDatesByAccountId
 );
 
 export default router;

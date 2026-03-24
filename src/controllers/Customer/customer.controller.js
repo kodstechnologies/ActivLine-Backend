@@ -409,3 +409,377 @@ export const updateCustomer = asyncHandler(async (req, res) => {
     .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
 });
 
+/**
+ * @description Update customer by MongoDB _id (franchise/admin edit)
+ * @route PATCH /api/customer/customers/:customerId/franchise-edit
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const updateCustomerByIdForFranchise = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new ApiError(400, "Invalid Customer ID format");
+  }
+
+  const existing = await Customer.findById(customerId);
+  if (!existing) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    existing.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only update customers from your franchise."
+    );
+  }
+
+  const updatedCustomer = await updateCustomerService(
+    existing.activlineUserId,
+    req.body || {},
+    req.files || {}
+  );
+
+  await createActivityLog({
+    req,
+    action: "UPDATE",
+    module: "CUSTOMER",
+    description: `Customer updated by ${req.user?.role || "ADMIN"}`,
+    targetId: existing._id,
+    metadata: {
+      activlineUserId: existing.activlineUserId,
+      updatedFields: Object.keys(req.body || {}),
+    },
+  });
+
+  return res
+    .status(200)
+    .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
+});
+
+/**
+ * @description Get maintenance dates for a customer
+ * @route GET /api/customer/customers/:customerId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const getCustomerMaintenanceDates = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new ApiError(400, "Invalid Customer ID format");
+  }
+
+  const customer = await Customer.findById(customerId).select(
+    "_id accountId maintenance"
+  );
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only view customers from your franchise."
+    );
+  }
+
+  return res.status(200).json(
+    ApiResponse.success(
+      {
+       
+        lastDate: customer.maintenance?.lastDate || null,
+        endDate: customer.maintenance?.endDate || null,
+      },
+      "Customer maintenance dates fetched successfully"
+    )
+  );
+});
+
+/**
+ * @description Create or update maintenance dates for a customer
+ * @route POST/PATCH /api/customer/customers/:customerId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+  const { lastDate, endDate } = req.body || {};
+
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new ApiError(400, "Invalid Customer ID format");
+  }
+
+  if (!lastDate && !endDate) {
+    throw new ApiError(400, "lastDate or endDate is required");
+  }
+
+  const customer = await Customer.findById(customerId).select(
+    "_id accountId maintenance"
+  );
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only update customers from your franchise."
+    );
+  }
+
+  const update = {};
+  if (lastDate !== undefined) update["maintenance.lastDate"] = lastDate;
+  if (endDate !== undefined) update["maintenance.endDate"] = endDate;
+
+  const updatedCustomer = await Customer.findByIdAndUpdate(
+  
+    { $set: update },
+    { new: true }
+  ).select("_id maintenance");
+
+  return res.status(200).json(
+    ApiResponse.success(
+      {
+       
+        lastDate: updatedCustomer.maintenance?.lastDate || null,
+        endDate: updatedCustomer.maintenance?.endDate || null,
+      },
+      "Customer maintenance dates updated successfully"
+    )
+  );
+});
+
+/**
+ * @description Delete maintenance dates for a customer
+ * @route DELETE /api/customer/customers/:customerId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
+  const { customerId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(customerId)) {
+    throw new ApiError(400, "Invalid Customer ID format");
+  }
+
+  const customer = await Customer.findById(customerId).select(
+    "_id accountId maintenance"
+  );
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only update customers from your franchise."
+    );
+  }
+
+  const updatedCustomer = await Customer.findByIdAndUpdate(
+
+    { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
+    { new: true }
+  ).select("_id maintenance");
+
+  return res.status(200).json(
+    ApiResponse.success(
+      {
+        
+        lastDate: updatedCustomer.maintenance?.lastDate || null,
+        endDate: updatedCustomer.maintenance?.endDate || null,
+      },
+      "Customer maintenance dates deleted successfully"
+    )
+  );
+});
+
+/**
+ * @description Get maintenance dates by accountId
+ * @route GET /api/customer/customers/account/:accountId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN, CUSTOMER)
+ */
+export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
+  async (req, res) => {
+    const { accountId } = req.params;
+
+    if (!accountId) {
+      throw new ApiError(400, "accountId is required");
+    }
+
+    if (
+      req.user?.role === "FRANCHISE_ADMIN" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(
+        403,
+        "Access Denied. You can only view customers from your franchise."
+      );
+    }
+
+    if (
+      req.user?.role === "CUSTOMER" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(403, "Access Denied. Invalid accountId.");
+    }
+
+    const customer = await Customer.findOne({ accountId }).select(
+      "_id accountId maintenance"
+    );
+
+    if (!customer) {
+      throw new ApiError(404, "Customer not found");
+    }
+
+    return res.status(200).json(
+      ApiResponse.success(
+        {
+          
+          accountId: customer.accountId,
+          lastDate: customer.maintenance?.lastDate || null,
+          endDate: customer.maintenance?.endDate || null,
+        },
+        "Customer maintenance dates fetched successfully"
+      )
+    );
+  }
+);
+
+/**
+ * @description Create or update maintenance dates by accountId
+ * @route POST/PATCH /api/customer/customers/account/:accountId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN, CUSTOMER)
+ */
+export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
+  async (req, res) => {
+    const { accountId } = req.params;
+    const { lastDate, endDate } = req.body || {};
+
+    if (!accountId) {
+      throw new ApiError(400, "accountId is required");
+    }
+
+    if (!lastDate && !endDate) {
+      throw new ApiError(400, "lastDate or endDate is required");
+    }
+
+    if (
+      req.user?.role === "FRANCHISE_ADMIN" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(
+        403,
+        "Access Denied. You can only update customers from your franchise."
+      );
+    }
+
+    if (
+      req.user?.role === "CUSTOMER" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(403, "Access Denied. Invalid accountId.");
+    }
+
+    const customer = await Customer.findOne({ accountId }).select(
+      "_id accountId maintenance"
+    );
+
+    if (!customer) {
+      throw new ApiError(404, "Customer not found");
+    }
+
+    const update = {};
+    if (lastDate !== undefined) update["maintenance.lastDate"] = lastDate;
+    if (endDate !== undefined) update["maintenance.endDate"] = endDate;
+
+    const updatedCustomer = await Customer.findOneAndUpdate(
+      { accountId },
+      { $set: update },
+      { new: true }
+    ).select("_id accountId maintenance");
+
+    return res.status(200).json(
+      ApiResponse.success(
+        {
+         
+          accountId: updatedCustomer.accountId,
+          lastDate: updatedCustomer.maintenance?.lastDate || null,
+          endDate: updatedCustomer.maintenance?.endDate || null,
+        },
+        "Customer maintenance dates updated successfully"
+      )
+    );
+  }
+);
+
+/**
+ * @description Delete maintenance dates by accountId
+ * @route DELETE /api/customer/customers/account/:accountId/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN, CUSTOMER)
+ */
+export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
+  async (req, res) => {
+    const { accountId } = req.params;
+
+    if (!accountId) {
+      throw new ApiError(400, "accountId is required");
+    }
+
+    if (
+      req.user?.role === "FRANCHISE_ADMIN" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(
+        403,
+        "Access Denied. You can only update customers from your franchise."
+      );
+    }
+
+    if (
+      req.user?.role === "CUSTOMER" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(403, "Access Denied. Invalid accountId.");
+    }
+
+    const customer = await Customer.findOne({ accountId }).select(
+      "_id accountId maintenance"
+    );
+
+    if (!customer) {
+      throw new ApiError(404, "Customer not found");
+    }
+
+    const updatedCustomer = await Customer.findOneAndUpdate(
+      { accountId },
+      { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
+      { new: true }
+    ).select("_id accountId maintenance");
+
+    return res.status(200).json(
+      ApiResponse.success(
+        {
+         
+          accountId: updatedCustomer.accountId,
+          lastDate: updatedCustomer.maintenance?.lastDate || null,
+          endDate: updatedCustomer.maintenance?.endDate || null,
+        },
+        "Customer maintenance dates deleted successfully"
+      )
+    );
+  }
+);
+
