@@ -82,9 +82,39 @@ const extractBillingMeta = (planDetails = {}) => {
   };
 };
 
+const extractPlanPeriodDays = (planDetails = {}) => {
+  const rows = Array.isArray(planDetails?.["billing Details"])
+    ? planDetails["billing Details"]
+    : [];
+
+  const periodRow = rows.find(
+    (row) => String(row?.property || "").toLowerCase() === "period"
+  );
+  const raw = normalizeText(periodRow?.value);
+  if (!raw) return null;
+
+  const match = raw.match(/(\d+)\s*(day|days|month|months|year|years)/i);
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  if (unit.startsWith("day")) return amount;
+  if (unit.startsWith("month")) return amount * 30;
+  if (unit.startsWith("year")) return amount * 365;
+  return null;
+};
+
 const mapPaymentHistoryDocFull = (doc, customer) => {
   const obj = doc?.toObject ? doc.toObject() : doc || {};
   const billingMeta = extractBillingMeta(obj.planDetails || {});
+  const periodDays = extractPlanPeriodDays(obj.planDetails || {});
+  const baseDate = obj.paidAt || obj.createdAt || null;
+  const planEndDate =
+    baseDate && periodDays
+      ? new Date(new Date(baseDate).getTime() + Number(periodDays) * 24 * 60 * 60 * 1000)
+      : null;
 
   return {
     paymentId: String(obj._id || doc?._id || ""),
@@ -98,6 +128,8 @@ const mapPaymentHistoryDocFull = (doc, customer) => {
     accountId: obj.accountId || null,
     profileId: obj.profileId || null,
     planName: obj.planName,
+    planPeriodDays: periodDays,
+    planEndDate: planEndDate ? planEndDate.toISOString() : null,
     paidAt: obj.paidAt || null,
     createdAt: obj.createdAt || null,
     updatedAt: obj.updatedAt || null,
@@ -106,6 +138,8 @@ const mapPaymentHistoryDocFull = (doc, customer) => {
       profileId: obj.profileId,
       planName: obj.planName,
       planAmount: obj.planAmount,
+      planPeriodDays: periodDays,
+      planEndDate: planEndDate ? planEndDate.toISOString() : null,
       billingPlanId: billingMeta.billingPlanId,
       totalPrice: billingMeta.totalPrice,
       details: obj.planDetails || {},

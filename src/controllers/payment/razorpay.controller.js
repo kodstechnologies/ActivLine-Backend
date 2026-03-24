@@ -441,6 +441,11 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     ...(customer || toCustomerSnapshot(null)),
     accountId: resolvedAccountId,
   };
+  const baseDate = obj.paidAt || obj.createdAt || null;
+  const planEndDate =
+    baseDate && periodDays
+      ? new Date(new Date(baseDate).getTime() + Number(periodDays) * 24 * 60 * 60 * 1000)
+      : null;
 
   return {
     paymentId: String(doc._id),
@@ -455,6 +460,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     profileId: obj.profileId,
     planName: resolvedPlanName,
     planPeriodDays: periodDays,
+    planEndDate: planEndDate ? planEndDate.toISOString() : null,
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
@@ -465,6 +471,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
       planName: resolvedPlanName,
       planAmount: obj.planAmount,
       planPeriodDays: periodDays,
+      planEndDate: planEndDate ? planEndDate.toISOString() : null,
       billingPlanId: billingMeta.billingPlanId,
       totalPrice: billingMeta.totalPrice,
       details: obj.planDetails || {},
