@@ -5,6 +5,8 @@ export const generateAccessToken = (customer,deviceId) => {
     {
       _id: customer._id,
       role: "CUSTOMER",
+      accountId: customer.accountId || null,
+      activlineUserId: customer.activlineUserId || null,
       deviceId, 
       phoneNumber: customer.phoneNumber,
     },

@@ -11,6 +11,7 @@ import dashboardRoutes from "./admin/Dashboard/dashboard.routes.js";
 import locationRoutes from "./customer/location.routes.js";
 import paymentRoutes from "./payment/index.js";
 import renewRoutes from "./renew.routes.js";
+import companyProfileRoutes from "./company/companyProfile.routes.js";
 
 import logsIndex from "./ActivityLog/index.js";// ✅ ADD THIS
 // import staffNotificationRoutes from "./Notification/staffnotification.routes.js";
@@ -28,6 +29,7 @@ router.use("/location", locationRoutes);
 router.use("/payment", paymentRoutes);
 router.use("/v1", renewRoutes);
 router.use("/notifications", notificationRoutes); 
+router.use("/company-profile", companyProfileRoutes);
 // router.use("/", staffNotificationRoutes);
 router.use("/logs", logsIndex); 
 // future:

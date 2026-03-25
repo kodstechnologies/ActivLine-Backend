@@ -33,36 +33,38 @@ const uploadCustomerDocumentsForUpdate = async (files) => {
     "profileImage",
   ];
 
-  for (const fileType of fileTypes) {
-    if (files?.[fileType]?.[0]?.path) {
-      const filePath = files[fileType][0].path;
-      if (!uploadedFilePaths.includes(filePath)) {
-        uploadedFilePaths.push(filePath);
+  try {
+    for (const fileType of fileTypes) {
+      if (files?.[fileType]?.[0]?.path) {
+        const filePath = files[fileType][0].path;
+        if (!uploadedFilePaths.includes(filePath)) {
+          uploadedFilePaths.push(filePath);
+        }
+        uploadPromises.push(
+          uploadOnCloudinary(filePath).then((result) => {
+            if (result) {
+              documentUrls[fileType] = result.secure_url;
+            }
+          })
+        );
       }
-      uploadPromises.push(
-        uploadOnCloudinary(filePath).then((result) => {
-          if (result) {
-            documentUrls[fileType] = result.secure_url;
-          }
-        })
-      );
     }
-  }
 
-  await Promise.all(uploadPromises);
+    await Promise.all(uploadPromises);
 
-  if (documentUrls.profileImage && !documentUrls.profilePicFile) {
-    documentUrls.profilePicFile = documentUrls.profileImage;
-  }
-  delete documentUrls.profileImage;
-
-  uploadedFilePaths.forEach((filePath) => {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    if (documentUrls.profileImage && !documentUrls.profilePicFile) {
+      documentUrls.profilePicFile = documentUrls.profileImage;
     }
-  });
+    delete documentUrls.profileImage;
 
-  return documentUrls;
+    return documentUrls;
+  } finally {
+    uploadedFilePaths.forEach((filePath) => {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    });
+  }
 };
 
 
@@ -119,7 +121,6 @@ export const getMessagesByRoom = async (roomId) => {
 
 
 export const createCustomerService = async (payload, files) => {
-  const uploadedFilePaths = [];
   const pickFirst = (...values) => {
     for (const value of values) {
       if (value !== undefined && value !== null && String(value).trim() !== "") {
@@ -197,12 +198,10 @@ export const createCustomerService = async (payload, files) => {
   });
 
   if (files?.idFile) {
-    uploadedFilePaths.push(files.idFile[0].path);
     formData.append("idFile", fs.createReadStream(files.idFile[0].path));
   }
 
   if (files?.addressFile) {
-    uploadedFilePaths.push(files.addressFile[0].path);
     formData.append(
       "addressFile",
       fs.createReadStream(files.addressFile[0].path)
@@ -222,34 +221,6 @@ export const createCustomerService = async (payload, files) => {
       activlineData?.message || "Failed to create user in Activline"
     );
   }
-
-  // 🔹 NEW: Upload all files to Cloudinary
-  const documentUrls = {};
-  const uploadPromises = [];
-  const fileTypes = ['idFile', 'addressFile', 'cafFile', 'reportFile', 'signFile', 'profilePicFile', 'profileImage'];
-
-  for (const fileType of fileTypes) {
-    if (files?.[fileType]?.[0]?.path) {
-      const filePath = files[fileType][0].path;
-      if (!uploadedFilePaths.includes(filePath)) {
-        uploadedFilePaths.push(filePath);
-      }
-      uploadPromises.push(
-        uploadOnCloudinary(filePath).then(result => {
-          if (result) {
-            documentUrls[fileType] = result.secure_url;
-          }
-        })
-      );
-    }
-  }
-
-  // Wait for all Cloudinary uploads to finish
-  await Promise.all(uploadPromises);
-  if (documentUrls.profileImage && !documentUrls.profilePicFile) {
-    documentUrls.profilePicFile = documentUrls.profileImage;
-  }
-  delete documentUrls.profileImage;
 
   // 🔹 3. Validate referral code if user used one
   let referrer = null;
@@ -398,12 +369,12 @@ const savedCustomer = await createCustomerRepo({ // The pre-save hook will gener
      🔹 DOCUMENTS
   =============================== */
   documents: {
-    idFile: documentUrls.idFile || null,
-    addressFile: documentUrls.addressFile || null,
-    cafFile: documentUrls.cafFile || null,
-    reportFile: documentUrls.reportFile || null,
-    signFile: documentUrls.signFile || null,
-    profilePicFile: documentUrls.profilePicFile || null,
+    idFile: null,
+    addressFile: null,
+    cafFile: null,
+    reportFile: null,
+    signFile: null,
+    profilePicFile: null,
   },
 
   /* ===============================
@@ -421,13 +392,6 @@ const savedCustomer = await createCustomerRepo({ // The pre-save hook will gener
     );
   }
 
-  // 🔹 6. Clean up local files
-  uploadedFilePaths.forEach(filePath => {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  });
-
   return {
     customer: savedCustomer,
     credentials: {
@@ -439,6 +403,27 @@ const savedCustomer = await createCustomerRepo({ // The pre-save hook will gener
       password: generatedPassword,
     },
   };
+};
+
+export const finalizeCustomerDocuments = async (activlineUserId, files) => {
+  if (!activlineUserId || !files || Object.keys(files).length === 0) {
+    return null;
+  }
+
+  const documentUrls = await uploadCustomerDocumentsForUpdate(files);
+  const updateData = {};
+
+  Object.entries(documentUrls).forEach(([key, value]) => {
+    if (value) {
+      updateData["documents." + key] = value;
+    }
+  });
+
+  if (Object.keys(updateData).length === 0) {
+    return null;
+  }
+
+  return updateCustomerRepo(activlineUserId, updateData);
 };
 
 const buildCustomerUpdateData = (payload) => {

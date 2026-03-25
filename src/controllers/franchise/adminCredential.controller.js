@@ -309,11 +309,13 @@ export const franchiseAdminLogin = async (req,res)=>{
 
  const token = jwt.sign(
    {
-     adminId:admin._id,
-     accountId:admin.accountId
+     _id: admin._id,
+     role: "FRANCHISE_ADMIN",
+     email: admin.email,
+     accountId: admin.accountId,
    },
-   process.env.JWT_SECRET,
-   {expiresIn:"1d"}
+   process.env.ACCESS_TOKEN_SECRET,
+   { expiresIn: "1d" }
  );
 
  await createActivityLog({

@@ -74,7 +74,7 @@ router
 router.get(
   "/customers/:customerId/city",
   verifyJWT,
-  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF", "CUSTOMER"),
   getCustomerCityById
 );
 

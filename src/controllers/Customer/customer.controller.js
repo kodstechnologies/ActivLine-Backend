@@ -8,6 +8,7 @@ import {
   getProfileImageService,
   updateProfileImageService,
   deleteProfileImageService,
+  finalizeCustomerDocuments,
 } from "../../services/Customer/customer.service.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
@@ -186,6 +187,12 @@ export const getCustomerCityById = asyncHandler(async (req, res) => {
     }
   }
 
+  if (req.user?.role === "CUSTOMER") {
+    if (String(customer._id) !== String(req.user._id)) {
+      throw new ApiError(403, "Access Denied. You can only view your own details.");
+    }
+  }
+
   const city =
     customer.address?.city ||
     customer.installationAddress?.city ||
@@ -242,51 +249,78 @@ export const createCustomer = asyncHandler(async (req, res) => {
     };
   }
 
-  if (value.emailId) {
-    await sendCustomerWelcomeEmail({
-      to: value.emailId,
-      userName: result.credentials.userName,
-      password: result.credentials.password,
-      phoneNumber: value.phoneNumber,
-      emailId: value.emailId,
-    });
-  }
-
-  await createActivityLog({
-    req,
-    user: req.user || { _id: result.customer?._id, role: "CUSTOMER" },
-    action: "CREATE",
-    module: "CUSTOMER",
-    description: req.user
-      ? `Customer created by ${req.user.role}`
-      : "Customer self-registered",
-    targetId: result.customer?._id || null,
-    metadata: {
-      customerId: result.customer?._id || null,
-      accountId: result.customer?.accountId || null,
-      createdByRole: req.user?.role || "CUSTOMER",
-    },
-  });
-  try {
-    await notifyFranchiseAdmins({
-      accountId: result.customer?.accountId || null,
-      title: "New Customer Created",
-      message: `Customer ${result.customer?.userName || "Unknown"} created`,
-      data: {
-        customerId: result.customer?._id?.toString() || null,
-        activlineUserId: result.customer?.activlineUserId || null,
-      },
-    });
-  } catch (err) {
-    console.error("Franchise notification failed:", err?.message);
-  }
-
-  return res.status(201).json(
+  const response = res.status(201).json(
     ApiResponse.success(
       null,
       "Your account is created in ActivLine"
     )
   );
+
+  setImmediate(() => {
+    void (async () => {
+      const tasks = [];
+
+      if (value.emailId) {
+        tasks.push(
+          sendCustomerWelcomeEmail({
+            to: value.emailId,
+            userName: result.credentials.userName,
+            password: result.credentials.password,
+            phoneNumber: value.phoneNumber,
+            emailId: value.emailId,
+          })
+        );
+      }
+
+      tasks.push(
+        createActivityLog({
+          req,
+          user: req.user || { _id: result.customer?._id, role: "CUSTOMER" },
+          action: "CREATE",
+          module: "CUSTOMER",
+          description: req.user
+            ? `Customer created by ${req.user.role}`
+            : "Customer self-registered",
+          targetId: result.customer?._id || null,
+          metadata: {
+            customerId: result.customer?._id || null,
+            accountId: result.customer?.accountId || null,
+            createdByRole: req.user?.role || "CUSTOMER",
+          },
+        })
+      );
+
+      tasks.push(
+        notifyFranchiseAdmins({
+          accountId: result.customer?.accountId || null,
+          title: "New Customer Created",
+          message: `Customer ${result.customer?.userName || "Unknown"} created`,
+          data: {
+            customerId: result.customer?._id?.toString() || null,
+            activlineUserId: result.customer?.activlineUserId || null,
+          },
+        })
+      );
+
+      if (req.files && Object.keys(req.files).length > 0) {
+        tasks.push(
+          finalizeCustomerDocuments(
+            result.customer?.activlineUserId || null,
+            req.files
+          )
+        );
+      }
+
+      const results = await Promise.allSettled(tasks);
+      results.forEach((taskResult) => {
+        if (taskResult.status === "rejected") {
+          console.error("Background task failed:", taskResult.reason?.message || taskResult.reason);
+        }
+      });
+    })();
+  });
+
+  return response;
 });
 
 /**
@@ -675,6 +709,49 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
       throw new ApiError(400, "accountId is required");
     }
 
+    if (req.user?.role === "CUSTOMER") {
+      let me = null;
+      let tokenAccountId = req.user.accountId || null;
+
+      if (!tokenAccountId && req.user.activlineUserId) {
+        me = await Customer.findOne({
+          activlineUserId: req.user.activlineUserId,
+        }).select("_id accountId maintenance");
+      } else if (req.user._id) {
+        me = await Customer.findById(req.user._id).select(
+          "_id accountId maintenance"
+        );
+      }
+
+      if (!me) {
+        throw new ApiError(404, "Customer not found");
+      }
+
+      if (!tokenAccountId) {
+        tokenAccountId = me.accountId || null;
+      }
+
+      if (!tokenAccountId) {
+        throw new ApiError(401, "AccountId missing in token");
+      }
+
+      if (String(tokenAccountId) !== String(accountId)) {
+        throw new ApiError(403, "Access Denied. Invalid accountId.");
+      }
+
+      return res.status(200).json(
+        ApiResponse.success(
+          {
+            customerId: me._id,
+            accountId: me.accountId,
+            firstDate: me.maintenance?.lastDate || null,
+            endDate: me.maintenance?.endDate || null,
+          },
+          "Customer maintenance dates fetched successfully"
+        )
+      );
+    }
+
     if (
       req.user?.role === "FRANCHISE_ADMIN" &&
       String(req.user.accountId) !== String(accountId)
@@ -685,30 +762,24 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
       );
     }
 
-    if (
-      req.user?.role === "CUSTOMER" &&
-      String(req.user.accountId) !== String(accountId)
-    ) {
-      throw new ApiError(403, "Access Denied. Invalid accountId.");
-    }
-
-    const customer = await Customer.findOne({ accountId }).select(
+    const customers = await Customer.find({ accountId }).select(
       "_id accountId maintenance"
     );
 
-    if (!customer) {
+    if (!customers.length) {
       throw new ApiError(404, "Customer not found");
     }
 
     return res.status(200).json(
       ApiResponse.success(
-        {
+        customers.map((customer) => ({
           customerId: customer._id,
           accountId: customer.accountId,
           firstDate: customer.maintenance?.lastDate || null,
           endDate: customer.maintenance?.endDate || null,
-        },
-        "Customer maintenance dates fetched successfully"
+        })),
+        "Customer maintenance dates fetched successfully",
+        { count: customers.length }
       )
     );
   }
@@ -732,6 +803,49 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
       throw new ApiError(400, "lastDate or endDate is required");
     }
 
+    if (req.user?.role === "CUSTOMER") {
+      const me = await Customer.findById(req.user._id).select(
+        "_id accountId"
+      );
+
+      if (!me) {
+        throw new ApiError(404, "Customer not found");
+      }
+
+      if (String(me.accountId) !== String(accountId)) {
+        throw new ApiError(403, "Access Denied. Invalid accountId.");
+      }
+
+      const update = {};
+      if (lastDate !== undefined) update["maintenance.lastDate"] = lastDate;
+      if (endDate !== undefined) update["maintenance.endDate"] = endDate;
+
+      const updateResult = await Customer.updateMany(
+        { accountId },
+        { $set: update }
+      );
+
+      return res.status(200).json(
+        ApiResponse.success(
+          {
+            accountId,
+            firstDate: lastDate !== undefined ? lastDate : null,
+            endDate: endDate !== undefined ? endDate : null,
+            updatedCount: updateResult.modifiedCount || updateResult.nModified || 0,
+          },
+          "Customer maintenance dates updated successfully"
+        )
+      );
+    }
+
+    const customers = await Customer.find({ accountId }).select(
+      "_id accountId maintenance"
+    );
+
+    if (!customers.length) {
+      throw new ApiError(404, "Customer not found");
+    }
+
     if (
       req.user?.role === "FRANCHISE_ADMIN" &&
       String(req.user.accountId) !== String(accountId)
@@ -742,38 +856,22 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
       );
     }
 
-    if (
-      req.user?.role === "CUSTOMER" &&
-      String(req.user.accountId) !== String(accountId)
-    ) {
-      throw new ApiError(403, "Access Denied. Invalid accountId.");
-    }
-
-    const customer = await Customer.findOne({ accountId }).select(
-      "_id accountId maintenance"
-    );
-
-    if (!customer) {
-      throw new ApiError(404, "Customer not found");
-    }
-
     const update = {};
     if (lastDate !== undefined) update["maintenance.lastDate"] = lastDate;
     if (endDate !== undefined) update["maintenance.endDate"] = endDate;
 
-    const updatedCustomer = await Customer.findOneAndUpdate(
+    const updateResult = await Customer.updateMany(
       { accountId },
-      { $set: update },
-      { new: true }
-    ).select("_id accountId maintenance");
+      { $set: update }
+    );
 
     return res.status(200).json(
       ApiResponse.success(
         {
-          customerId: updatedCustomer._id,
-          accountId: updatedCustomer.accountId,
-          firstDate: updatedCustomer.maintenance?.lastDate || null,
-          endDate: updatedCustomer.maintenance?.endDate || null,
+          accountId,
+          firstDate: lastDate !== undefined ? lastDate : null,
+          endDate: endDate !== undefined ? endDate : null,
+          updatedCount: updateResult.modifiedCount || updateResult.nModified || 0,
         },
         "Customer maintenance dates updated successfully"
       )
@@ -794,21 +892,36 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
       throw new ApiError(400, "accountId is required");
     }
 
-    if (
-      req.user?.role === "FRANCHISE_ADMIN" &&
-      String(req.user.accountId) !== String(accountId)
-    ) {
-      throw new ApiError(
-        403,
-        "Access Denied. You can only update customers from your franchise."
+    if (req.user?.role === "CUSTOMER") {
+      const me = await Customer.findById(req.user._id).select(
+        "_id accountId maintenance"
       );
-    }
 
-    if (
-      req.user?.role === "CUSTOMER" &&
-      String(req.user.accountId) !== String(accountId)
-    ) {
-      throw new ApiError(403, "Access Denied. Invalid accountId.");
+      if (!me) {
+        throw new ApiError(404, "Customer not found");
+      }
+
+      if (String(me.accountId) !== String(accountId)) {
+        throw new ApiError(403, "Access Denied. Invalid accountId.");
+      }
+
+      const updatedCustomer = await Customer.findByIdAndUpdate(
+        me._id,
+        { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
+        { new: true }
+      ).select("_id accountId maintenance");
+
+      return res.status(200).json(
+        ApiResponse.success(
+          {
+            customerId: updatedCustomer._id,
+            accountId: updatedCustomer.accountId,
+            firstDate: updatedCustomer.maintenance?.lastDate || null,
+            endDate: updatedCustomer.maintenance?.endDate || null,
+          },
+          "Customer maintenance dates deleted successfully"
+        )
+      );
     }
 
     const customer = await Customer.findOne({ accountId }).select(
@@ -817,6 +930,16 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
 
     if (!customer) {
       throw new ApiError(404, "Customer not found");
+    }
+
+    if (
+      req.user?.role === "FRANCHISE_ADMIN" &&
+      String(req.user.accountId) !== String(accountId)
+    ) {
+      throw new ApiError(
+        403,
+        "Access Denied. You can only update customers from your franchise."
+      );
     }
 
     const updatedCustomer = await Customer.findOneAndUpdate(
