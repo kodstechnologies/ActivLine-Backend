@@ -24,7 +24,8 @@ router.get(
   allowRoles(
     ROLES.SUPER_ADMIN,
     ROLES.ADMIN,
-    ROLES.ADMIN_STAFF
+    ROLES.ADMIN_STAFF,
+    ROLES.CUSTOMER
   ),
   getAllCannedResponses
 );
@@ -35,7 +36,8 @@ router.get(
   allowRoles(
     ROLES.SUPER_ADMIN,
     ROLES.ADMIN,
-    ROLES.ADMIN_STAFF
+    ROLES.ADMIN_STAFF,
+    ROLES.CUSTOMER
   ),
   getAllCannedResponses
 );

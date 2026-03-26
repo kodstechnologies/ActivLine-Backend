@@ -100,6 +100,7 @@
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const customerSchema = new mongoose.Schema(
   {
@@ -301,15 +302,34 @@ customerSchema.pre("save", async function () {
     let nextNumber = 1;
 
     if (lastCustomer?.referral?.code) {
-      const lastCode = lastCustomer.referral.code;
-      const lastNumber = parseInt(lastCode.replace(firstName, ""), 10);
-      nextNumber = lastNumber + 1;
+      const lastCode = String(lastCustomer.referral.code);
+      const match = lastCode.match(/(\d+)$/);
+      const lastNumber = match ? parseInt(match[1], 10) : 0;
+      nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
     }
 
-    const paddedNumber = String(nextNumber).padStart(4, "0");
+    let paddedNumber = String(nextNumber).padStart(4, "0");
+    let candidate = `${firstName}${paddedNumber}`;
+    let attempts = 0;
+
+    while (
+      attempts < 20 &&
+      (await mongoose.models.Customer.exists({ "referral.code": candidate }))
+    ) {
+      nextNumber += 1;
+      paddedNumber = String(nextNumber).padStart(4, "0");
+      candidate = `${firstName}${paddedNumber}`;
+      attempts += 1;
+    }
+
+    if (attempts >= 20) {
+      // Fallback: add a random suffix to avoid unique conflicts
+      const randomSuffix = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+      candidate = `${firstName}${randomSuffix}`;
+    }
 
     this.referral = {
-      code: `${firstName}${paddedNumber}`,
+      code: candidate,
       referredCount: 0
     };
   }

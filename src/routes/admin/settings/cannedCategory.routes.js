@@ -25,7 +25,8 @@ router.get(
   allowRoles(
     ROLES.SUPER_ADMIN,
     ROLES.ADMIN,
-    ROLES.ADMIN_STAFF
+    ROLES.ADMIN_STAFF,
+    ROLES.CUSTOMER
   ),
   getCategories
 );

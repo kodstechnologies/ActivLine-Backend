@@ -727,6 +727,17 @@ export const createPlanOrder = async (req, res, next) => {
       customerDoc = resolvedCustomer || customerDoc;
     }
 
+    if (!paidByPatch && customerDoc) {
+      paidByPatch = toPaidBySnapshot(customerDoc);
+    }
+
+    if (!paidByPatch) {
+      return res.status(400).json({
+        success: false,
+        message: "userName is required",
+      });
+    }
+
     if (paidByPatch) {
       await PaymentHistory.updateOne(
         { razorpayOrderId: order.id },
@@ -817,7 +828,21 @@ export const verifyPlanPayment = async (req, res, next) => {
     }
 
     if (!paidByPatch) {
-      // keep paidBy empty if not explicitly provided
+      const resolvedCustomer = await resolveCustomerForPayment(
+        resolvedAccountId,
+        resolvedGroupId,
+        resolvedProfileId
+      );
+      if (resolvedCustomer) {
+        paidByPatch = toPaidBySnapshot(resolvedCustomer);
+      }
+    }
+
+    if (!paidByPatch) {
+      return res.status(400).json({
+        success: false,
+        message: "userName is required",
+      });
     }
 
     if (!isValid) {
@@ -900,9 +925,8 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
     const fromDate = req.query.fromDate?.trim();
     const toDate = req.query.toDate?.trim();
     const profileId = req.query.profileId?.trim();
-
-    const baseQuery = buildCustomerOwnershipQuery(customer);
-    if (!baseQuery) {
+    const userNameOnly = normalizeText(customer?.userName);
+    if (!userNameOnly) {
       return res.status(200).json({
         success: true,
         page,
@@ -922,15 +946,19 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
       });
     }
 
-    const query = { ...baseQuery };
+    const safeUserName = escapeRegex(userNameOnly);
+    const query = {
+      $or: [
+        { paidByUserName: { $regex: `^${safeUserName}$`, $options: "i" } },
+        { paidByName: { $regex: `^${safeUserName}$`, $options: "i" } },
+      ],
+    };
 
     if (planName) {
       query.planName = { $regex: planName, $options: "i" };
     }
 
-    if (profileId) {
-      query.profileId = String(profileId);
-    }
+    // Do not override profileId from query params for "my" history
 
     if (status) {
       const upperStatus = status.toUpperCase();
@@ -998,6 +1026,7 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
         fromDate: fromDate || null,
         toDate: toDate || null,
         profileId: profileId || null,
+        userName: userNameOnly,
       },
       summary: statusSummary,
       data: items.map((item) => {
