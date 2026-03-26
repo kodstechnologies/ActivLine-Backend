@@ -129,6 +129,25 @@ export const createCustomerService = async (payload, files) => {
     }
     return undefined;
   };
+  const rawPhone = payload.phoneNumber !== undefined && payload.phoneNumber !== null
+    ? String(payload.phoneNumber).trim()
+    : "";
+  if (rawPhone) {
+    const existingByPhone = await Customer.findOne({ phoneNumber: rawPhone }).select("_id");
+    if (existingByPhone) {
+      throw new ApiError(409, "Phone number already exists");
+    }
+  }
+
+  const rawEmail = payload.emailId !== undefined && payload.emailId !== null
+    ? String(payload.emailId).trim().toLowerCase()
+    : "";
+  if (rawEmail) {
+    const existingByEmail = await Customer.findOne({ emailId: rawEmail }).select("_id");
+    if (existingByEmail) {
+      throw new ApiError(409, "Email already exists");
+    }
+  }
   const generateRandomUserName = async () => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const randomNumber = crypto.randomInt(0, 1000000);

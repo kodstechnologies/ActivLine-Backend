@@ -27,6 +27,13 @@ export const getResponsesByCategoryService = async (categoryId) => {
 };
 
 /**
+ * 📖 GET ALL RESPONSES
+ */
+export const getAllResponsesService = async () => {
+  return CannedResponse.find({}).sort({ createdAt: 1 });
+};
+
+/**
  * ✏️ UPDATE RESPONSE
  */
 export const updateCannedResponseService = async (id, data) => {

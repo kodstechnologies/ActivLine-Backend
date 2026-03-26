@@ -4,6 +4,7 @@ import ApiResponse from "../../../utils/ApiReponse.js";
 import {
   createCannedResponseService,
   getResponsesByCategoryService,
+  getAllResponsesService,
   updateCannedResponseService,
   deleteCannedResponseService,
 } from "../../../services/admin/settings/cannedResponse.service.js";
@@ -25,7 +26,10 @@ export const createCannedResponse = asyncHandler(async (req, res) => {
 });
 
 export const getAllCannedResponses = asyncHandler(async (req, res) => {
-  const responses = await getResponsesByCategoryService(req.params.categoryId);
+  const { categoryId } = req.params || {};
+  const responses = categoryId
+    ? await getResponsesByCategoryService(categoryId)
+    : await getAllResponsesService();
 
   res.status(200).json(
     ApiResponse.success(responses, "Canned responses fetched")
