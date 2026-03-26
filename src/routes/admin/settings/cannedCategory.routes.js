@@ -21,13 +21,12 @@ const router = Router();
  */
 router.get(
   "/categories",
-  // verifyJWT,
-  // allowRoles(
-  //   ROLES.SUPER_ADMIN,
-  //   ROLES.ADMIN,
-  //   ROLES.ADMIN_STAFF,
-  //   ROLES.CUSTOMER
-  // ),
+  verifyJWT,
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF
+  ),
   getCategories
 );
 
@@ -39,7 +38,7 @@ router.get(
 router.post(
   "/categories",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   createCategory
 );
 
@@ -51,7 +50,7 @@ router.post(
 router.put(
   "/categories/:id",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_STAFF),
   updateCategory
 );
 
@@ -63,7 +62,7 @@ router.put(
 router.delete(
   "/categories/:id",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_STAFF),
   deleteCategory
 );
 

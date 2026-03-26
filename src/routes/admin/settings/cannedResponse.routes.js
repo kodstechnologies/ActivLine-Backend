@@ -49,20 +49,20 @@ router.get(
 router.post(
   "/responses",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   createCannedResponse
 );
 router.put(
   "/responses/:id",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   updateCannedResponse
 );
 
 router.delete(
   "/responses/:id",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   deleteCannedResponse
 );
 
