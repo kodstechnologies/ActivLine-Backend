@@ -786,6 +786,40 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
 );
 
 /**
+ * @description Get maintenance dates for the authenticated account (single summary)
+ * @route GET /api/customer/customers/account/me/maintenance
+ * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN)
+ */
+export const getMyAccountMaintenanceSummary = asyncHandler(async (req, res) => {
+  const accountId = req.user?.accountId || null;
+  if (!accountId) {
+    throw new ApiError(401, "AccountId missing in token");
+  }
+
+  const customer = await Customer.findOne({
+    accountId,
+    $or: [
+      { "maintenance.lastDate": { $ne: null } },
+      { "maintenance.endDate": { $ne: null } },
+    ],
+  })
+    .sort({ updatedAt: -1 })
+    .select("_id accountId maintenance");
+
+  return res.status(200).json(
+    ApiResponse.success(
+      {
+        accountId,
+        customerId: customer?._id || null,
+        firstDate: customer?.maintenance?.lastDate || null,
+        endDate: customer?.maintenance?.endDate || null,
+      },
+      "Account maintenance dates fetched successfully"
+    )
+  );
+});
+
+/**
  * @description Create or update maintenance dates by accountId
  * @route POST/PATCH /api/customer/customers/account/:accountId/maintenance
  * @access Private (ADMIN, SUPER_ADMIN, FRANCHISE_ADMIN, CUSTOMER)

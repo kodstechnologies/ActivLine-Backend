@@ -13,6 +13,7 @@ import {
   getCustomerMaintenanceDatesByAccountId,
   upsertCustomerMaintenanceDatesByAccountId,
   deleteCustomerMaintenanceDatesByAccountId,
+  getMyAccountMaintenanceSummary,
   getMyProfileImage,
   updateMyProfileImage,
   deleteMyProfileImage,
@@ -121,6 +122,13 @@ router.delete(
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
   deleteCustomerMaintenanceDates
+);
+
+router.get(
+  "/customers/account/me/maintenance",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  getMyAccountMaintenanceSummary
 );
 
 router.get(
