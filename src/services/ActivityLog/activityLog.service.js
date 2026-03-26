@@ -28,9 +28,17 @@ export const createActivityLog = async ({
       break;
 
     case "STAFF":
-    case "ADMIN_STAFF":
       actor = await Staff.findById(actorRef._id).lean();
       actorModelName = "Staff";
+      break;
+    case "ADMIN_STAFF":
+      actor = await Admin.findById(actorRef._id).lean();
+      if (actor) {
+        actorModelName = "Admin";
+      } else {
+        actor = await Staff.findById(actorRef._id).lean();
+        actorModelName = actor ? "Staff" : null;
+      }
       break;
 
     case "CUSTOMER":
