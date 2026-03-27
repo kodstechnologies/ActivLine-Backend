@@ -38,6 +38,9 @@ const franchiseAdminSchema = new mongoose.Schema(
 
   refreshToken: String,
 
+  resetOTP: { type: String, default: null },
+  resetOTPExpiry: { type: Date, default: null },
+
   profileImage: String,
 
   fcmTokens: [

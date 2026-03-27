@@ -6,6 +6,7 @@ import * as LogoutRepo from "../../repositories/auth/logout.repository.js";
 import Customer from "../../models/Customer/customer.model.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
+import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 
 const ALLOWED_FILTER_ROLES = ["SUPER_ADMIN", "ADMIN", "ADMIN_STAFF", "STAFF", "FRANCHISE_ADMIN"];
 
@@ -325,6 +326,21 @@ export const updateAdminStaff = async (staffId, payload) => {
   }
 
   const { status, ...updateData } = payload;
+
+  if (updateData.email) {
+    const normalizedEmail = String(updateData.email).trim().toLowerCase();
+    const existingAdmin = await StaffRepo.findByEmail(normalizedEmail);
+    if (existingAdmin && String(existingAdmin._id) !== String(staff._id)) {
+      throw new ApiError(409, "Email already in use");
+    }
+    const existingFranchise = await FranchiseAdmin.findOne({
+      email: normalizedEmail,
+    }).select("_id");
+    if (existingFranchise) {
+      throw new ApiError(409, "Email already in use");
+    }
+    updateData.email = normalizedEmail;
+  }
   const updatedStaff = await StaffRepo.updateById(staffId, updateData);
 
   return {

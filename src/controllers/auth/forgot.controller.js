@@ -9,16 +9,12 @@ import {
   validateForgotPassword,
   validateResetPassword,
 } from "../../validations/auth/forgot.validator.js";
-import ApiError from "../../utils/ApiError.js";
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   // ✅ VALIDATE INPUT
   validateForgotPassword(req.body);
 
   const { email } = req.body;
-  if (email !== req.user.email) {
-    throw new ApiError(403, "You can change only your own password");
-  }
 
   await forgotPasswordService(email);
 
@@ -32,13 +28,22 @@ export const resetPassword = asyncHandler(async (req, res) => {
   validateResetPassword(req.body);
 
   const { email, otp, password } = req.body;
-  if (email !== req.user.email) {
-    throw new ApiError(403, "You can change only your own password");
-  }
 
   await resetPasswordService({ email, otp, password });
 
   res.status(200).json(
     ApiResponse.success(null, "Password reset successful")
+  );
+});
+
+export const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
+  validateForgotPassword(req.body);
+
+  const { email } = req.body;
+
+  await forgotPasswordService(email);
+
+  res.status(200).json(
+    ApiResponse.success(null, "OTP resent to email")
   );
 });

@@ -29,12 +29,9 @@ export const countTodayResolvedTickets = () => {
   });
 };
 
-/* DISTINCT CHAT CUSTOMERS */
+/* TOTAL CUSTOMERS (DB) */
 export const countDistinctCustomers = async () => {
-  const ids = await ChatRoom.distinct("customer", {
-    customer: { $ne: null },
-  });
-  return ids.length;
+  return Customer.countDocuments({});
 };
 
 /* RECENT TICKETS */

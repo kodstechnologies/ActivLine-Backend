@@ -2,6 +2,7 @@
 import ApiError from "../../utils/ApiError.js";
 import bcrypt from "bcryptjs";
 import * as ProfileRepo from "../../repositories/auth/auth.profile.repository.js";
+import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 
 // ✅ GET OWN PROFILE
 export const getMyProfile = async (userId) => {
@@ -30,8 +31,13 @@ export const updateMyProfile = async (userId, payload) => {
 
   // 🔐 If email is being updated, check uniqueness
   if (payload.email && payload.email !== user.email) {
-    const emailExists = await ProfileRepo.findByEmail(payload.email);
+    const normalizedEmail = String(payload.email).trim().toLowerCase();
+    const emailExists = await ProfileRepo.findByEmail(normalizedEmail);
     if (emailExists) {
+      throw new ApiError(409, "Email already in use");
+    }
+    const franchiseExists = await FranchiseAdmin.findOne({ email: normalizedEmail }).select("_id");
+    if (franchiseExists) {
       throw new ApiError(409, "Email already in use");
     }
   }
@@ -44,7 +50,7 @@ export const updateMyProfile = async (userId, payload) => {
 
   const updatedUser = await ProfileRepo.updateById(userId, {
     name: payload.name ?? user.name,
-    email: payload.email ?? user.email,
+    email: payload.email ? String(payload.email).trim().toLowerCase() : user.email,
     password: hashedPassword ?? user.password,
     phone: payload.phone ?? user.phone,
     fcmToken: payload.fcmToken ?? user.fcmToken,

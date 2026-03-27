@@ -1,16 +1,23 @@
 import ApiError from "../../../utils/ApiError.js";
 import * as AdminRepo from "../../../repositories/auth/auth.profile.repository.js";
+import FranchiseAdmin from "../../../models/Franchise/franchiseAdmin.model.js";
 import StaffStatus from "../../../models/staff/Staff.model.js";
 
 export const createAdminStaff = async (payload) => {
-  const exists = await AdminRepo.findByEmail(payload.email);
+  const normalizedEmail = String(payload.email || "").trim().toLowerCase();
+  const exists = await AdminRepo.findByEmail(normalizedEmail);
   if (exists) {
+    throw new ApiError(409, "User with email already exists");
+  }
+
+  const franchiseExists = await FranchiseAdmin.findOne({ email: normalizedEmail }).select("_id");
+  if (franchiseExists) {
     throw new ApiError(409, "User with email already exists");
   }
 
   const user = await AdminRepo.createAuth({
     name: payload.name,
-    email: payload.email,
+    email: normalizedEmail,
     password: payload.password,
 
     // ✅ ROLE FROM PAYLOAD

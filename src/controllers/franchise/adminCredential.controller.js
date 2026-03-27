@@ -1,15 +1,44 @@
 import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 import Franchise from "../../models/Franchise/franchise.model.js";
+import Admin from "../../models/auth/auth.model.js";
 import axios from "axios";
 import bcrypt from "bcryptjs";
 import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
+import {
+  sendFranchiseAdminCreatedEmail,
+  sendFranchiseAdminProfileUpdatedEmail,
+} from "../../utils/mail.util.js";
 
 
 export const createFranchiseAdmin = asyncHandler(async (req, res) => {
 
   const { accountId, name, email, password } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return res.status(400).json({
+      success: false,
+      message: "Email is required",
+    });
+  }
+
+  const existingAdmin = await Admin.findOne({ email: normalizedEmail }).select("_id");
+  if (existingAdmin) {
+    return res.status(409).json({
+      success: false,
+      message: "Email already exists",
+    });
+  }
+
+  const existingFranchise = await FranchiseAdmin.findOne({ email: normalizedEmail }).select("_id");
+  if (existingFranchise) {
+    return res.status(409).json({
+      success: false,
+      message: "User with email already exists",
+    });
+  }
 
   let profileImage = "";
 
@@ -27,7 +56,7 @@ export const createFranchiseAdmin = asyncHandler(async (req, res) => {
   const admin = await FranchiseAdmin.create({
     accountId,
     name,
-    email,
+    email: normalizedEmail,
     password,
     role: "FRANCHISE_ADMIN",
     status: "ACTIVE",
@@ -44,6 +73,22 @@ export const createFranchiseAdmin = asyncHandler(async (req, res) => {
     metadata: {
       accountId: admin.accountId,
     },
+  });
+
+  setImmediate(() => {
+    Promise.resolve(
+      sendFranchiseAdminCreatedEmail({
+        to: admin.email,
+        name: admin.name,
+        email: admin.email,
+        password,
+        role: admin.role,
+        status: admin.status,
+        accountId: admin.accountId,
+      })
+    ).catch((err) => {
+      console.error("Franchise admin create email failed:", err?.message || err);
+    });
   });
 
   res.status(201).json({
@@ -164,11 +209,22 @@ export const updateMyFranchiseAdminProfile = asyncHandler(async (req, res) => {
         message: "Email already in use",
       });
     }
+    const existingAdmin = await Admin.findOne({
+      email: normalizedEmail,
+      _id: { $ne: adminId },
+    }).select("_id");
+    if (existingAdmin) {
+      return res.status(409).json({
+        success: false,
+        message: "Email already in use",
+      });
+    }
     updateData.email = normalizedEmail;
   }
 
-  if (password && String(password).trim()) {
-    updateData.password = await bcrypt.hash(String(password), 10);
+  const rawPassword = password && String(password).trim() ? String(password).trim() : "";
+  if (rawPassword) {
+    updateData.password = await bcrypt.hash(rawPassword, 10);
   }
 
   if (req.file) {
@@ -192,6 +248,23 @@ export const updateMyFranchiseAdminProfile = asyncHandler(async (req, res) => {
     runValidators: true,
   }).select("-password -refreshToken");
 
+  setImmediate(() => {
+    Promise.resolve(
+      sendFranchiseAdminProfileUpdatedEmail({
+        to: updatedAdmin?.email,
+        name: updatedAdmin?.name,
+        email: updatedAdmin?.email,
+        role: updatedAdmin?.role,
+        status: updatedAdmin?.status,
+        accountId: updatedAdmin?.accountId,
+        password: rawPassword || null,
+        updatedFields: Object.keys(updateData || {}),
+      })
+    ).catch((err) => {
+      console.error("Franchise admin update email failed:", err?.message || err);
+    });
+  });
+
   return res.status(200).json({
     success: true,
     message: "Franchise admin profile updated successfully",
@@ -211,8 +284,9 @@ export const updateFranchiseAdmin = async (req,res)=>{
 
  if(name) updateData.name = name;
 
- if(password){
-   updateData.password = await bcrypt.hash(password,10);
+ const rawPassword = password && String(password).trim() ? String(password).trim() : "";
+ if(rawPassword){
+   updateData.password = await bcrypt.hash(rawPassword,10);
  }
 
  if(req.file){
@@ -242,6 +316,23 @@ export const updateFranchiseAdmin = async (req,res)=>{
      updatedFields: Object.keys(updateData),
    },
  });
+
+  setImmediate(() => {
+    Promise.resolve(
+      sendFranchiseAdminProfileUpdatedEmail({
+        to: admin?.email,
+        name: admin?.name,
+        email: admin?.email,
+        role: admin?.role,
+        status: admin?.status,
+        accountId: admin?.accountId,
+        password: rawPassword || null,
+        updatedFields: Object.keys(updateData || {}),
+      })
+    ).catch((err) => {
+      console.error("Franchise admin update email failed:", err?.message || err);
+    });
+  });
 
  res.json({
    success:true,

@@ -159,3 +159,91 @@ export const sendAdminStaffProfileUpdatedEmail = async ({
     throw new ApiError(500, "Failed to send staff update email");
   }
 };
+
+/**
+ * Send franchise admin account created email
+ */
+export const sendFranchiseAdminCreatedEmail = async ({
+  to,
+  name,
+  email,
+  password,
+  role,
+  status,
+  accountId,
+}) => {
+  try {
+    await transporter.sendMail({
+      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      to,
+      subject: "Your ActivLine franchise admin account is created",
+      html: `
+        <div style="font-family: Arial; padding: 12px">
+          <h2>Welcome to ActivLine</h2>
+          <p>Your franchise admin account has been created successfully.</p>
+          <p><b>Name:</b> ${name || "-"}</p>
+          <p><b>Email:</b> ${email || to}</p>
+          <p><b>Role:</b> ${role || "FRANCHISE_ADMIN"}</p>
+          <p><b>Status:</b> ${status || "ACTIVE"}</p>
+          <p><b>Account ID:</b> ${accountId || "-"}</p>
+          <p><b>Password:</b> ${password || "-"}</p>
+          <p>Please keep these credentials safe.</p>
+          <br/>
+          <small>- ActivLine Support</small>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Mail send failed:", error.message);
+    throw new ApiError(500, "Failed to send franchise admin account email");
+  }
+};
+
+/**
+ * Send franchise admin profile updated email
+ */
+export const sendFranchiseAdminProfileUpdatedEmail = async ({
+  to,
+  name,
+  email,
+  role,
+  status,
+  accountId,
+  password,
+  updatedFields = [],
+}) => {
+  try {
+    const fields =
+      Array.isArray(updatedFields) && updatedFields.length
+        ? updatedFields.join(", ")
+        : "Profile details";
+
+    const passwordBlock = password
+      ? `<p><b>New Password:</b> ${password}</p>`
+      : "";
+
+    await transporter.sendMail({
+      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      to,
+      subject: "Your ActivLine franchise admin profile was updated",
+      html: `
+        <div style="font-family: Arial; padding: 12px">
+          <h2>Profile Updated</h2>
+          <p>Your franchise admin profile has been updated.</p>
+          <p><b>Updated fields:</b> ${fields}</p>
+          <p><b>Name:</b> ${name || "-"}</p>
+          <p><b>Email:</b> ${email || to}</p>
+          <p><b>Role:</b> ${role || "FRANCHISE_ADMIN"}</p>
+          <p><b>Status:</b> ${status || "-"}</p>
+          <p><b>Account ID:</b> ${accountId || "-"}</p>
+          ${passwordBlock}
+          <br/>
+          <small>- ActivLine Support</small>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("Mail send failed:", error.message);
+    throw new ApiError(500, "Failed to send franchise admin update email");
+  }
+};

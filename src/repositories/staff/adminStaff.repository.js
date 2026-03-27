@@ -40,6 +40,10 @@ export const findById = async (id) => {
   return Admin.findById(id);
 };
 
+export const findByEmail = async (email) => {
+  return Admin.findOne({ email });
+};
+
 export const updateById = async (id, updateData) => {
   return Admin.findByIdAndUpdate(id, updateData, {
     new: true,
