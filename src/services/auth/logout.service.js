@@ -11,7 +11,6 @@ import * as LogoutRepo from "../../repositories/auth/logout.repository.js";
  * RULES:
  * - ADMIN -> clear tokens only
  * - ADMIN_STAFF -> clear tokens only (status changes only by admin action)
- * - TERMINATED staff -> status never changed
  * - Idempotent (safe to call multiple times)
  */
 export const logoutService = async ({ userId, fcmToken }) => {

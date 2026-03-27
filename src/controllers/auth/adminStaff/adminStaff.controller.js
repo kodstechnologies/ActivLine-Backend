@@ -4,6 +4,7 @@ import { validateCreateAdminStaff } from "../../../validations/auth/adminStaff/a
 import * as AuthService from "../../../services/auth/adminStaff/adminStaff.service.js";
 import { createActivityLog } from "../../../services/ActivityLog/activityLog.service.js";
 import ApiError from "../../../utils/ApiError.js";
+import { sendAdminStaffCreatedEmail } from "../../../utils/mail.util.js";
 
 export const createAdminStaff = asyncHandler(async (req, res) => {
   validateCreateAdminStaff(req.body);
@@ -24,6 +25,21 @@ export const createAdminStaff = asyncHandler(async (req, res) => {
     module: "ADMIN_STAFF",
     description: `Created admin staff: ${staff.name}`,
     targetId: staff.id,
+  });
+
+  setImmediate(() => {
+    Promise.resolve(
+      sendAdminStaffCreatedEmail({
+        to: staff.email,
+        name: staff.name,
+        email: staff.email,
+        password: req.body?.password,
+        role: staff.role,
+        status: staff.status || "ACTIVE",
+      })
+    ).catch((err) => {
+      console.error("Staff create email failed:", err?.message || err);
+    });
   });
 
   return res

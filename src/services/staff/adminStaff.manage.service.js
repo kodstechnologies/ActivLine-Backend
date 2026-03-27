@@ -316,7 +316,7 @@ export const updateAdminStaff = async (staffId, payload) => {
     );
     currentStatus = statusDoc.status;
 
-    if (payload.status === "TERMINATED") {
+    if (payload.status === "DISABLED") {
       await LogoutRepo.clearSession(staff._id);
     }
   } else {

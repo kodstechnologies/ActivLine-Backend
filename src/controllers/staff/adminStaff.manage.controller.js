@@ -3,6 +3,7 @@ import ApiResponse from "../../utils/ApiReponse.js";
 import { validateUpdateAdminStaff,validateStaffIdParam } from "../../validations/staff/adminStaff.manage.validation.js";
 import * as StaffService from "../../services/staff/adminStaff.manage.service.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
+import { sendAdminStaffProfileUpdatedEmail } from "../../utils/mail.util.js";
 
 
 export const getAllAdminStaff = asyncHandler(async (req, res) => {
@@ -66,6 +67,21 @@ export const updateAdminStaff = asyncHandler(async (req, res) => {
     metadata: {
       updatedFields: Object.keys(req.body || {}),
     },
+  });
+
+  setImmediate(() => {
+    Promise.resolve(
+      sendAdminStaffProfileUpdatedEmail({
+        to: staff.email,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role,
+        status: staff.status,
+        updatedFields: Object.keys(req.body || {}),
+      })
+    ).catch((err) => {
+      console.error("Staff update email failed:", err?.message || err);
+    });
   });
 
   return res.json(

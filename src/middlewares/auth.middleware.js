@@ -189,9 +189,9 @@ export const canManageAdminStaff = asyncHandler(async (req, _, next) => {
   }
 
   const staffStatus = await StaffStatus.findOne({ staffId: staff._id });
-  // ❌ TERMINATED staff cannot be managed
-  if (staffStatus && staffStatus.status === "TERMINATED") {
-    throw new ApiError(403, "Cannot manage terminated admin staff");
+  // ❌ DISABLED staff cannot be managed by non-admins
+  if (staffStatus && staffStatus.status === "DISABLED") {
+    throw new ApiError(403, "Cannot manage disabled admin staff");
   }
 
   // ❌ ADMIN_STAFF cannot manage other admin staff
@@ -210,8 +210,8 @@ export const blockTerminatedStaff = async (req, _, next) => {
   if (req.user?.role === "ADMIN_STAFF") {
     const status = await StaffStatus.findOne({ staffId: req.user._id });
 
-    if (status?.status === "TERMINATED") {
-      throw new ApiError(403, "Account terminated");
+    if (status?.status === "DISABLED") {
+      throw new ApiError(403, "Account disabled");
     }
   }
   next();

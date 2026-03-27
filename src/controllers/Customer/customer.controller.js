@@ -16,6 +16,7 @@ import ApiResponse from "../../utils/ApiReponse.js";
 import { sendCustomerWelcomeEmail } from "../../utils/mail.util.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
+import { notifyAdmins } from "../../services/Notification/admin.notification.service.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -298,6 +299,19 @@ export const createCustomer = asyncHandler(async (req, res) => {
           data: {
             customerId: result.customer?._id?.toString() || null,
             activlineUserId: result.customer?.activlineUserId || null,
+          },
+        })
+      );
+
+      tasks.push(
+        notifyAdmins({
+          title: "New Customer Created",
+          message: `Customer ${result.customer?.userName || "Unknown"} created`,
+          data: {
+            customerId: result.customer?._id?.toString() || null,
+            accountId: result.customer?.accountId || null,
+            activlineUserId: result.customer?.activlineUserId || null,
+            type: "CUSTOMER_CREATED",
           },
         })
       );

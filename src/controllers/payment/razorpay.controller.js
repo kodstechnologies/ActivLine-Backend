@@ -1677,6 +1677,141 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
   }
 };
 
+export const getLatestFranchisePaymentHistory = async (req, res, next) => {
+  try {
+    const accountId = req.user?.accountId ? String(req.user.accountId).trim() : "";
+
+    if (!accountId) {
+      return res.status(400).json({
+        success: false,
+        message: "Account ID missing for franchise admin",
+      });
+    }
+
+    const limit = 5;
+    const query = { accountId };
+
+    const [items, total, summaryRows] = await Promise.all([
+      PaymentHistory.find(query).sort({ createdAt: -1 }).limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const statusSummary = {
+      PENDING: 0,
+      SUCCESS: 0,
+      FAILED: 0,
+    };
+
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) {
+        statusSummary[row._id] = row.count;
+      }
+    }
+
+    const resolveCustomer = await buildCustomerResolver(items);
+
+    return res.status(200).json({
+      success: true,
+      page: 1,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        accountId,
+      },
+      summary: statusSummary,
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+        const doc = item?.toObject ? item.toObject() : item || {};
+        const userName =
+          doc.paidByUserName ||
+          mapped?.paidBy?.userName ||
+          mapped?.customer?.userName ||
+          null;
+        const { customer, paidBy, plan, ...rest } = mapped || {};
+        return { ...rest, userName };
+      }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getLatestPurchasedPlan = async (req, res, next) => {
+  try {
+    const requestedAccountId = req.query.accountId?.trim();
+    const requestedGroupId = req.query.groupId?.trim();
+
+    const isFranchiseAdmin = req.user?.role === "FRANCHISE_ADMIN";
+    const accountId = isFranchiseAdmin
+      ? String(req.user?.accountId || "").trim()
+      : requestedAccountId || "";
+
+    if (isFranchiseAdmin && requestedAccountId && requestedAccountId !== accountId) {
+      return res.status(403).json({
+        success: false,
+        message: "Access Denied. You can only view your franchise data.",
+      });
+    }
+
+    if (!accountId && !requestedGroupId) {
+      return res.status(400).json({
+        success: false,
+        message: "accountId or groupId is required",
+      });
+    }
+
+    const orFilters = [];
+    if (accountId) orFilters.push({ accountId: String(accountId) });
+    if (requestedGroupId) orFilters.push({ groupId: String(requestedGroupId) });
+
+    const query = {
+      status: "SUCCESS",
+      ...(orFilters.length === 1 ? orFilters[0] : { $or: orFilters }),
+    };
+
+    const latestPayment = await PaymentHistory.findOne(query)
+      .sort({ paidAt: -1, createdAt: -1 });
+
+    if (!latestPayment) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        message: "No purchased plan found",
+        filters: {
+          accountId: accountId || null,
+          groupId: requestedGroupId || null,
+        },
+      });
+    }
+
+    const resolveCustomer = await buildCustomerResolver([latestPayment]);
+    const mapped = mapPaymentHistoryDoc(latestPayment, resolveCustomer(latestPayment));
+    const doc = latestPayment?.toObject ? latestPayment.toObject() : latestPayment || {};
+    const userName =
+      doc.paidByUserName ||
+      mapped?.paidBy?.userName ||
+      mapped?.customer?.userName ||
+      null;
+    const { customer, paidBy, plan, ...rest } = mapped || {};
+
+    return res.status(200).json({
+      success: true,
+      data: { ...rest, userName },
+      filters: {
+        accountId: accountId || null,
+        groupId: requestedGroupId || null,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getSinglePlanPaymentDetails = async (req, res, next) => {
   try {
     const { paymentId } = req.params;

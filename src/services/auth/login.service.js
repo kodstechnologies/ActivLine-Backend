@@ -35,12 +35,8 @@ export const loginUser = async ({
       throw new ApiError(403, "Staff status not found");
     }
 
-    if (staffStatus.status === "TERMINATED") {
-      throw new ApiError(403, "Your account is terminated. Contact admin.");
-    }
-
-    if (staffStatus.status === "INACTIVE") {
-      throw new ApiError(403, "Your account is inactive. Ask admin to activate.");
+    if (staffStatus.status === "DISABLED") {
+      throw new ApiError(403, "Your account is disabled. Contact admin.");
     }
 
     await StaffStatus.updateOne(

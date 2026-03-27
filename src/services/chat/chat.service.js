@@ -11,6 +11,8 @@ import { notifyCustomer } from "../Notification/customer.notification.service.js
 import CustomerNotification from "../../models/Notification/customernotification.model.js";
 import Notification from "../../models/Notification/notification.model.js";
 import { notifyFranchiseAdmins } from "../Notification/franchise.notification.service.js";
+import { notifyAdmins } from "../Notification/admin.notification.service.js";
+import Customer from "../../models/Customer/customer.model.js";
 /**
  * ===============================
  * ADMIN → FETCH ALL ROOMS
@@ -93,6 +95,27 @@ export const openChatIfNotExists = async (req) => {
     });
   }
 
+  try {
+    const customer = await Customer.findById(customerId).select(
+      "accountId userName activlineUserId"
+    );
+
+    await notifyAdmins({
+      title: "New Ticket Created",
+      message: `Ticket ${room._id} created by ${customer?.userName || "Customer"}`,
+      data: {
+        ticketId: room._id,
+        status: "OPEN",
+        customerId: customerId?.toString() || null,
+        accountId: customer?.accountId || null,
+        activlineUserId: customer?.activlineUserId || null,
+        type: "TICKET_CREATED",
+      },
+    });
+  } catch (err) {
+    console.error("Admin ticket notification failed:", err?.message);
+  }
+
   return room;
 };
 
@@ -148,6 +171,13 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       },
     });
 
+    await Promise.all([
+      ChatMessage.deleteMany({ roomId }),
+      ChatRoom.deleteOne({ _id: roomId }),
+      CustomerNotification.deleteMany({ "data.roomId": roomId }),
+      Notification.deleteMany({ "data.roomId": roomId }),
+    ]);
+
     try {
       const accountId = room.customer?.accountId || null;
       if (accountId) {
@@ -163,16 +193,21 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
           },
         });
       }
-    } catch (err) {
-      console.error("Franchise ticket notification failed:", err?.message);
-    }
 
-    await Promise.all([
-      ChatMessage.deleteMany({ roomId }),
-      ChatRoom.deleteOne({ _id: roomId }),
-      CustomerNotification.deleteMany({ "data.roomId": roomId }),
-      Notification.deleteMany({ "data.roomId": roomId }),
-    ]);
+      await notifyAdmins({
+        title: "Ticket Closed",
+        message: `Ticket ${roomId} closed`,
+        data: {
+          ticketId: roomId,
+          status: "CLOSED",
+          customerId: room.customer?._id?.toString() || null,
+          accountId,
+          type: "TICKET_CLOSED",
+        },
+      });
+    } catch (err) {
+      console.error("Ticket notification failed:", err?.message);
+    }
 
     return {
       _id: roomId,

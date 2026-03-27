@@ -16,7 +16,7 @@ export const validateUpdateAdminStaff = (data) => {
     }
   });
 
-  if (data.status && !["ACTIVE", "DISABLED", "TERMINATED"].includes(data.status)) {
+  if (data.status && !["ACTIVE", "DISABLED"].includes(data.status)) {
     throw new ApiError(400, "Invalid status value");
   }
 };

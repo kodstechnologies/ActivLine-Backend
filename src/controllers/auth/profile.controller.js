@@ -2,6 +2,7 @@
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import * as ProfileService from "../../services/auth/profile.service.js";
+import { sendAdminStaffProfileUpdatedEmail } from "../../utils/mail.util.js";
 
 // ✅ GET OWN PROFILE
 export const getMyProfile = asyncHandler(async (req, res) => {
@@ -18,6 +19,21 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
     req.user._id,
     req.body
   );
+
+  setImmediate(() => {
+    Promise.resolve(
+      sendAdminStaffProfileUpdatedEmail({
+        to: updatedUser.email,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        status: updatedUser.status || "ACTIVE",
+        updatedFields: Object.keys(req.body || {}),
+      })
+    ).catch((err) => {
+      console.error("Profile update email failed:", err?.message || err);
+    });
+  });
 
   return res
     .status(200)

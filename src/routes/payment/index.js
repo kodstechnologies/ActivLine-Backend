@@ -8,6 +8,8 @@ import {
   getPlanPaymentHistoryByGroup,
   getAllPlanPaymentHistory,
   getSinglePlanPaymentDetails,
+  getLatestFranchisePaymentHistory,
+  getLatestPurchasedPlan,
 } from "../../controllers/payment/razorpay.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
@@ -33,6 +35,18 @@ router.get(
 );
 router.get("/franchise/account/:accountId/history", getPlanPaymentHistoryByGroup);
 router.get("/franchise/:groupId/history", getPlanPaymentHistoryByGroup);
+router.get(
+  "/franchise/account/history/latest",
+  verifyJWT,
+  allowRoles("FRANCHISE_ADMIN"),
+  getLatestFranchisePaymentHistory
+);
+router.get(
+  "/plan/latest",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
+  getLatestPurchasedPlan
+);
 router.get("/history/:paymentId", getSinglePlanPaymentDetails);
 
 export default router;
