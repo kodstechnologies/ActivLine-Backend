@@ -1,6 +1,5 @@
 import admin from "firebase-admin";
-import fs from "fs";
-import path from "path";
+import "dotenv/config";
 
 // Firebase app instance
 let firebaseAdmin;
@@ -28,35 +27,10 @@ const resolveServiceAccountFromEnv = () => {
   return null;
 };
 
-const resolveServiceAccountFromFile = () => {
-  const explicitPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  const defaultPath = path.join(
-    process.cwd(),
-    "src",
-    "config",
-    "firebase-admin.json"
-  );
-  const candidatePath = explicitPath || defaultPath;
-
-  if (!fs.existsSync(candidatePath)) {
-    return { serviceAccount: null, path: candidatePath };
-  }
-
-  const raw = fs.readFileSync(candidatePath, "utf8");
-  const parsed = JSON.parse(raw);
-  return { serviceAccount: parsed, path: candidatePath };
-};
-
 try {
   if (admin.apps.length === 0) {
     let serviceAccount = resolveServiceAccountFromEnv();
     let source = "env";
-
-    if (!serviceAccount) {
-      const fromFile = resolveServiceAccountFromFile();
-      serviceAccount = fromFile.serviceAccount;
-      source = fromFile.path;
-    }
 
     if (
       !serviceAccount ||
