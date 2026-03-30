@@ -1,11 +1,4 @@
 import admin from "firebase-admin";
-import { readFileSync, existsSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-// Fix __dirname in ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Firebase app instance
 let firebaseAdmin;
