@@ -7,7 +7,7 @@ export const sendPushNotification = async ({ fcmToken, title, body }) => {
   if (!fcmToken) return;
 
   try {
-    await admin.messaging().send(
+    const response = await admin.messaging().send(
       buildFcmMessage({
         token: fcmToken,
         title,
@@ -15,7 +15,7 @@ export const sendPushNotification = async ({ fcmToken, title, body }) => {
       })
     );
 
-    console.log("✅ Push notification sent");
+    console.log("✅ Push notification sent", { messageId: response });
   } catch (err) {
     console.error("❌ Firebase error:", err.message);
   }

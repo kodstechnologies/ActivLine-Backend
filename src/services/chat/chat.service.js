@@ -171,6 +171,19 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       },
     });
 
+    // ✅ Notify customer about status change (CLOSED)
+    try {
+      await notifyCustomer({
+        customerId: room.customer._id,
+        type: "TICKET",
+        data: { roomId, status: "CLOSED" },
+        title: "Ticket Closed",
+        message: "Your support ticket has been closed",
+      });
+    } catch (err) {
+      console.error("Customer ticket notification failed:", err?.message);
+    }
+
     await Promise.all([
       ChatMessage.deleteMany({ roomId }),
       ChatRoom.deleteOne({ _id: roomId }),
@@ -254,15 +267,25 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     statusAtThatTime: newStatus,
   });
 
-  // ✅ 🔔 NOTIFY CUSTOMER
-  if (newStatus === "RESOLVED") {
+  // ✅ 🔔 NOTIFY CUSTOMER (ALL STATUS CHANGES)
+  try {
+    const statusMessageMap = {
+      OPEN: "Your support ticket is open",
+      ASSIGNED: "Your support ticket has been assigned",
+      IN_PROGRESS: "Your support ticket is in progress",
+      RESOLVED: "✅ Your issue has been resolved",
+      CLOSED: "Your support ticket has been closed",
+    };
+
     await notifyCustomer({
       customerId: room.customer._id, // IMPORTANT
       type: "TICKET",
-      data: { roomId },
-      title: firstCustomerMsg?.message || "",
-      message: "✅ Your issue has been resolved",
+      data: { roomId, status: newStatus },
+      title: firstCustomerMsg?.message || "Ticket Update",
+      message: statusMessageMap[newStatus] || `Ticket status updated to ${newStatus}`,
     });
+  } catch (err) {
+    console.error("Customer ticket notification failed:", err?.message);
   }
 
   try {

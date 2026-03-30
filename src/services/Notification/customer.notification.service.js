@@ -25,12 +25,17 @@ export const notifyCustomer = async ({
   }).select("fcmToken");
 
   if (!sessions.length) {
+    console.warn("⚠️ No active FCM sessions for customer:", customerId);
     return notification; // No devices logged in
   }
 
   // 🔹 3️⃣ Send notification to ALL devices
   for (const session of sessions) {
     try {
+      console.log("📨 Sending FCM to customer:", {
+        customerId,
+        tokenPreview: String(session.fcmToken || "").slice(0, 12) + "...",
+      });
       await sendPushNotification({
         fcmToken: session.fcmToken,
         title,

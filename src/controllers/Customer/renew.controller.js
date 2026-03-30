@@ -3,6 +3,7 @@ import ApiError from "../../utils/ApiError.js";
 import { renewUserPlan } from "../../services/Customer/renew.service.js";
 import Customer from "../../models/Customer/customer.model.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
+import { notifyCustomer } from "../../services/Notification/customer.notification.service.js";
 
 // export const renew = asyncHandler(async (req, res) => {
 //   const payload = req.body || {};
@@ -83,6 +84,18 @@ export const renew = asyncHandler(async (req, res) => {
             customerId: customer._id?.toString() || null,
             activlineUserId: customer.activlineUserId || null,
             type: "PLAN_RENEW",
+          },
+        });
+      }
+
+      if (customer?._id) {
+        await notifyCustomer({
+          customerId: customer._id,
+          title: "Plan Recharge सफल",
+          message: "आपका प्लान सफलतापूर्वक रिचार्ज हो गया है।",
+          type: "PLAN_RENEW",
+          data: {
+            activlineUserId: customer.activlineUserId || null,
           },
         });
       }
