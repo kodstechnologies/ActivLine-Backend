@@ -32,7 +32,14 @@ jobs:
           script: |
             cd /home/ubuntu/ActivLine-Backend
 
-            echo "${{ secrets.ENV_FILE }}" > .env
+            # Write .env from GitHub secret (preserve newlines)
+            printf '%s' "${{ secrets.ENV_FILE }}" > .env
+
+            # Write Firebase service account JSON from base64 secret
+            # Create a GitHub secret named FIREBASE_ADMIN_JSON_B64 with the base64 of your JSON file
+            echo "${{ secrets.FIREBASE_ADMIN_JSON_B64 }}" | base64 -d > src/config/firebase-admin.json
+
+            chmod 600 .env src/config/firebase-admin.json
 
             npm install --production
 
