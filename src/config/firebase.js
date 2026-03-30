@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Path to your JSON file
-const serviceAccountPath = path.join(__dirname, "./firebase-admin.json");
+const serviceAccountPath = path.join(__dirname, "firebase-admin.json");
 
 // Load JSON directly
 function loadServiceAccount() {
