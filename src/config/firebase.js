@@ -1,59 +1,60 @@
 import admin from "firebase-admin";
-import fs from "fs";
-import path from "path";
+import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
 // Fix __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
-// Path to JSON (optional fallback)
-const serviceAccountPath = path.join(__dirname, "./firebase-admin.json");
+// Firebase app instance
+let firebaseAdmin;
 
-function loadServiceAccount() {
-  // ✅ 1. PRIORITY → ENV VARIABLES (BEST FOR PRODUCTION)
-  const {
-    FIREBASE_PROJECT_ID,
-    FIREBASE_CLIENT_EMAIL,
-    FIREBASE_PRIVATE_KEY,
-  } = process.env;
+try {
+  if (admin.apps.length === 0) {
 
-  if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
-    return {
-      projectId: FIREBASE_PROJECT_ID,       // ✅ FIXED KEY NAME
-      clientEmail: FIREBASE_CLIENT_EMAIL,   // ✅ FIXED KEY NAME
-      privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    const serviceAccount = {
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     };
-  }
 
-  // ✅ 2. FALLBACK → LOCAL JSON (ONLY FOR LOCAL DEV)
-  try {
-    if (fs.existsSync(serviceAccountPath)) {
-      const raw = fs.readFileSync(serviceAccountPath, "utf8");
-      return JSON.parse(raw);
+    // Validate required fields
+    if (
+      !serviceAccount.project_id ||
+      !serviceAccount.private_key ||
+      !serviceAccount.client_email
+    ) {
+      throw new Error(
+        "Missing required fields: project_id, private_key, client_email"
+      );
     }
-  } catch (err) {
-    console.error("❌ Error reading firebase-admin.json:", err.message);
+
+    // Fix private key newline issue
+    if (typeof serviceAccount.private_key === "string") {
+      serviceAccount.private_key =
+        serviceAccount.private_key.replace(/\\n/g, "\n");
+    }
+
+    // Initialize Firebase
+    firebaseAdmin = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    console.log("✅ Firebase Admin SDK initialized successfully");
+
+  } else {
+    firebaseAdmin = admin.app();
   }
 
-  // ❌ If nothing works
-  throw new Error(
-    `Firebase service account not found. 
-Expected ENV variables OR file at: ${serviceAccountPath}`
+} catch (error) {
+  console.error("❌ Firebase Admin SDK initialization error:", error.message);
+  console.warn(
+    "⚠️ Firebase will not work. Make sure firebase-admin.json exists in src/config"
   );
 }
 
-const serviceAccount = loadServiceAccount();
-
-// ✅ Initialize Firebase only once
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-
-  console.log("✅ Firebase Admin initialized successfully");
-}
-
 // Export
-export const firebaseAdmin = admin;
-export default admin;
+export default firebaseAdmin;
+export { admin };
+export { firebaseAdmin };
