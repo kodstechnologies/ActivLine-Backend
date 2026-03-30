@@ -37,7 +37,7 @@ function loadServiceAccount() {
   throw new Error(
     `Firebase service account not found. Expected file at "${serviceAccountPath}" or env vars FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.`
   );
-}
+} 
 
 const serviceAccount = loadServiceAccount();
 
