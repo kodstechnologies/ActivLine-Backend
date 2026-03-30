@@ -7,19 +7,11 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Preferred path to JSON (same folder)
-const serviceAccountPath = path.join(__dirname, "./firebase-admin.json");
+// Path to JSON (optional fallback)
+const serviceAccountPath = path.join(__dirname, "firebase-admin.json");
 
 function loadServiceAccount() {
-  // 1) Try local JSON file
-  try {
-    const raw = fs.readFileSync(serviceAccountPath, "utf8");
-    return JSON.parse(raw);
-  } catch (err) {
-    // Fall through to env-based config
-  }
-
-  // 2) Fallback to env vars (useful for CI/servers)
+  // ✅ 1. PRIORITY → ENV VARIABLES (BEST FOR PRODUCTION)
   const {
     FIREBASE_PROJECT_ID,
     FIREBASE_CLIENT_EMAIL,
@@ -28,26 +20,40 @@ function loadServiceAccount() {
 
   if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
     return {
-      project_id: FIREBASE_PROJECT_ID,
-      client_email: FIREBASE_CLIENT_EMAIL,
-      private_key: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      projectId: FIREBASE_PROJECT_ID,       // ✅ FIXED KEY NAME
+      clientEmail: FIREBASE_CLIENT_EMAIL,   // ✅ FIXED KEY NAME
+      privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
     };
   }
 
+  // ✅ 2. FALLBACK → LOCAL JSON (ONLY FOR LOCAL DEV)
+  try {
+    if (fs.existsSync(serviceAccountPath)) {
+      const raw = fs.readFileSync(serviceAccountPath, "utf8");
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error("❌ Error reading firebase-admin.json:", err.message);
+  }
+
+  // ❌ If nothing works
   throw new Error(
-    `Firebase service account not found. Expected file at "${serviceAccountPath}" or env vars FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.`
+    `Firebase service account not found. 
+Expected ENV variables OR file at: ${serviceAccountPath}`
   );
-} 
+}
 
 const serviceAccount = loadServiceAccount();
 
-// Initialize Firebase (only once)
+// ✅ Initialize Firebase only once
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
- 
+
   console.log("✅ Firebase Admin initialized successfully");
 }
 
+// Export
 export const firebaseAdmin = admin;
+export default admin;
