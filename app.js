@@ -10,11 +10,11 @@ const app = express();
 
 const allowedOrigins = [
     "http://localhost:3000",
-    "http://localhost:5173/",
+    "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
     "http://localhost:8000",
-    "http://15.206.235.221/"
+    "http://15.206.235.221"
 ];
 
 app.use(
