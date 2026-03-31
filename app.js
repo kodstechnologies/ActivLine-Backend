@@ -30,8 +30,6 @@ app.use(
             return callback(null, false); // ✅ DO NOT THROW ERROR
         },
         credentials: true,
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
     })
 );
 
@@ -52,7 +50,7 @@ app.get("/test", (req, res) => {
     // Send it in the response
     res.json({
         success: true,
-        message: `Server is working!!!`,
+        message: `Server is working!`,
         timestamp: new Date().toISOString(),
     });
 });
