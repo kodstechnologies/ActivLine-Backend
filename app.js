@@ -8,37 +8,37 @@ import cookieParser from "cookie-parser";
 import path from "path";
 const app = express();
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:64255",
-         "http://localhost:8000"
-      ];
+// app.use(
+//   cors({
+//     origin: (origin, callback) => {
+//       const allowedOrigins = [
+//         "http://localhost:3000",
+//         "http://localhost:5173",
+//         "http://localhost:5174",
+//         "http://127.0.0.1:64255",
+//          "http://localhost:8000",
+//       ];
 
-      // 1. Allow requests with no origin (like mobile apps, Postman, or curl)
-      if (!origin || origin === "null") {
-        return callback(null, true);
-      }
+//       // 1. Allow requests with no origin (like mobile apps, Postman, or curl)
+//       if (!origin || origin === "null") {
+//         return callback(null, true);
+//       }
 
-      if (
-        allowedOrigins.includes(origin) ||
-        origin.startsWith("http://localhost") ||
-        origin.startsWith("http://127.0.0.1")
-      ) {
-        return callback(null, true);
-      }
+//       if (
+//         allowedOrigins.includes(origin) ||
+//         origin.startsWith("http://localhost") ||
+//         origin.startsWith("http://127.0.0.1")
+//       ) {
+//         return callback(null, true);
+//       }
 
-      callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+//       callback(new Error("Not allowed by CORS"));
+//     },
+//     credentials: true,
+//     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   })
+// );
 
 
 
@@ -65,12 +65,14 @@ app.use(
 // ✅ preflight support
 // app.options("*", cors());
 
+app.use(cors());
+
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser());
 app.use(
-  "/uploads/chat",
-  express.static(path.join(process.cwd(), "uploads/chat"))
+    "/uploads/chat",
+    express.static(path.join(process.cwd(), "uploads/chat"))
 );
 app.use("/", paymentRoutes);
 app.use("/api", routes);

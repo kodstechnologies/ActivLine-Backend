@@ -176,9 +176,9 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       await notifyCustomer({
         customerId: room.customer._id,
         type: "TICKET",
-        data: { roomId, status: "CLOSED" },
+        data: { roomId, ticketId: roomId, status: "CLOSED" },
         title: "Ticket Closed",
-        message: "Your support ticket has been closed",
+        message: `Your support ticket has been closed (Ticket ID: ${roomId})`,
       });
     } catch (err) {
       console.error("Customer ticket notification failed:", err?.message);
@@ -251,7 +251,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     .sort({ createdAt: 1 })
     .select("message");
 
-  let statusMessage = `Status changed to ${newStatus}`;
+  let statusMessage = `Status changed to ${newStatus}\nTicket ID: ${roomId}`;
 
   if (firstCustomerMsg?.message) {
     statusMessage += `\n\nTicket: ${firstCustomerMsg.message}`;
@@ -277,12 +277,15 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       CLOSED: "Your support ticket has been closed",
     };
 
+    const baseMessage =
+      statusMessageMap[newStatus] || `Ticket status updated to ${newStatus}`;
+
     await notifyCustomer({
       customerId: room.customer._id, // IMPORTANT
       type: "TICKET",
-      data: { roomId, status: newStatus },
+      data: { roomId, ticketId: roomId, status: newStatus },
       title: firstCustomerMsg?.message || "Ticket Update",
-      message: statusMessageMap[newStatus] || `Ticket status updated to ${newStatus}`,
+      message: `${baseMessage} (Ticket ID: ${roomId})`,
     });
   } catch (err) {
     console.error("Customer ticket notification failed:", err?.message);
