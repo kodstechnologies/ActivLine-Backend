@@ -16,15 +16,15 @@ const allowedOrigins = [
     "http://localhost:8000",
     "http://15.206.235.221"
 ];
-
+console.log("allowedOrigins",allowedOrigins);
 app.use(
     cors({
         origin: (origin, callback) => {
-            console.log("Origin:", origin); // 🔥 debug
-
+            
             if (!origin) return callback(null, true);
-
+            
             if (allowedOrigins.includes(origin)) {
+                console.log("Origin:", origin); // 🔥 debug
                 return callback(null, true);
             }
 
