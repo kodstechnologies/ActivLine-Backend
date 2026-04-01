@@ -27,6 +27,7 @@ export const initSocket = (server) => {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
+    "http://13.205.44.55"
   ];
 
   if (process.env.CORS_ORIGIN) {
