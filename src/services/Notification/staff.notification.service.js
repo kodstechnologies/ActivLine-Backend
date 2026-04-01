@@ -1,4 +1,3 @@
-// src/services/Notification/staff.notification.service.js
 import Notification from "../../models/Notification/notification.model.js";
 import Admin from "../../models/auth/auth.model.js";
 import { firebaseAdmin } from "../../config/firebase.js";
@@ -9,7 +8,6 @@ export const notifyStaffOnTicketAssign = async ({
   room,
   assignedBy,
 }) => {
-  // ✅ Save notification in DB
   const notification = await Notification.create({
     title: "Ticket Assigned to You",
     message: `Ticket ${room._id} has been assigned to you`,
@@ -22,27 +20,62 @@ export const notifyStaffOnTicketAssign = async ({
     recipientRole: "ADMIN_STAFF",
   });
 
-  // ✅ Send Firebase push
   const staff = await Admin.findById(staffId).select("fcmTokens");
+  const tokens = [...new Set((staff?.fcmTokens || []).map((item) => item.token).filter(Boolean))];
 
-  if (staff?.fcmTokens && staff.fcmTokens.length > 0) {
-    const tokens = staff.fcmTokens.map((t) => t.token).filter(Boolean);
+  if (!tokens.length) {
+    console.warn(`[staff.notify] No FCM tokens found for staff ${staffId}`);
+    return notification;
+  }
 
-    if (tokens.length > 0) {
-      const response = await firebaseAdmin.messaging().sendEachForMulticast(
-        buildFcmMulticastMessage({
-          tokens,
-          title: notification.title,
-          body: notification.message,
-          data: {
-            roomId: room._id.toString(),
-            type: "TICKET_ASSIGNED",
-          },
-        })
+  if (!firebaseAdmin) {
+    console.warn("[staff.notify] Firebase Admin SDK is not initialized");
+    return notification;
+  }
+
+  try {
+    const response = await firebaseAdmin.messaging().sendEachForMulticast(
+      buildFcmMulticastMessage({
+        tokens,
+        title: notification.title,
+        body: notification.message,
+        data: {
+          roomId: room._id.toString(),
+          type: "TICKET_ASSIGNED",
+          notificationId: notification._id.toString(),
+        },
+      })
+    );
+
+    const invalidTokens = [];
+
+    response.responses.forEach((result, index) => {
+      if (result.success) return;
+
+      const code = result.error?.code || "unknown";
+      console.error(
+        `[staff.notify] FCM failed for staff ${staffId}, token index ${index}: ${code}`
       );
 
-      // Intentionally no noisy logs here; errors are handled by Firebase SDK.
+      if (
+        code === "messaging/invalid-registration-token" ||
+        code === "messaging/registration-token-not-registered"
+      ) {
+        invalidTokens.push(tokens[index]);
+      }
+    });
+
+    if (invalidTokens.length) {
+      await Admin.updateOne(
+        { _id: staffId },
+        { $pull: { fcmTokens: { token: { $in: invalidTokens } } } }
+      );
     }
+  } catch (error) {
+    console.error(
+      `[staff.notify] Failed to send assignment notification to staff ${staffId}:`,
+      error?.message || error
+    );
   }
 
   return notification;
