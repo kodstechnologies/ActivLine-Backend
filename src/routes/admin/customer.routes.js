@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getPaymentHistoryByCustomerId,
   getPaymentHistoryByCustomerUserName,
+  getCurrentPlanPaymentHistoryByCustomerUserName,
 } from "../../controllers/payment/razorpay.controller.js";
 import { getCustomerTickets } from "../../controllers/Admin/customer.ticket.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
@@ -21,6 +22,13 @@ router.post(
   verifyJWT,
   allowRoles("ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
   getPaymentHistoryByCustomerUserName
+);
+
+router.post(
+  "/customers/payment-history/by-username/current-plan",
+  verifyJWT,
+  allowRoles("ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+  getCurrentPlanPaymentHistoryByCustomerUserName
 );
 
 router.get(

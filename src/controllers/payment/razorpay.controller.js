@@ -1364,6 +1364,63 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
   }
 };
 
+// Returns payment history for the customer's "current plan" (latest SUCCESS purchase)
+// by matching PaymentHistory.paidByUserName/paidByName.
+export const getCurrentPlanPaymentHistoryByCustomerUserName = async (req, res, next) => {
+  try {
+    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+
+    if (!bodyUserName) {
+      return res.status(400).json({
+        success: false,
+        message: "userName is required",
+      });
+    }
+
+    const userNameRegex = {
+      $regex: `^${escapeRegex(bodyUserName)}$`,
+      $options: "i",
+    };
+
+    const match = {
+      status: "SUCCESS",
+      $or: [{ paidByUserName: userNameRegex }, { paidByName: userNameRegex }],
+    };
+
+    const latestPayment = await PaymentHistory.findOne(match).sort({
+      paidAt: -1,
+      createdAt: -1,
+    });
+
+    if (!latestPayment) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        summary: { PENDING: 0, SUCCESS: 0, FAILED: 0 },
+        page: Math.max(Number(req.query.page) || 1, 1),
+        limit: Math.min(Math.max(Number(req.query.limit) || 10, 1), 100),
+        total: 0,
+        totalPages: 0,
+        filters: {
+          userName: bodyUserName,
+          planName: null,
+          status: req.query.status?.trim() || null,
+          date: req.query.date?.trim() || null,
+          fromDate: req.query.fromDate?.trim() || null,
+          toDate: req.query.toDate?.trim() || null,
+          profileId: req.query.profileId?.trim() || null,
+        },
+      });
+    }
+
+    // Reuse the existing by-username payment-history endpoint, but lock it to the latest planName.
+    req.query = { ...(req.query || {}), planName: latestPayment.planName };
+    return getPaymentHistoryByCustomerUserName(req, res, next);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 export const getMySinglePlanPaymentDetails = async (req, res, next) => {
   try {
     const customerId = req.user?._id;
