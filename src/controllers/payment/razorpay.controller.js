@@ -1154,13 +1154,31 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
 
     const skip = (page - 1) * limit;
 
-    const [items, total, summaryRows] = await Promise.all([
+    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
       PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       PaymentHistory.countDocuments(query),
       PaymentHistory.aggregate([
         { $match: query },
         { $group: { _id: "$status", count: { $sum: 1 } } },
       ]),
+      PaymentHistory.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+            },
+            notPaidCount: {
+              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+      accountId
+        ? Customer.countDocuments({ accountId: String(accountId) })
+        : Customer.countDocuments({}),
     ]);
 
     const statusSummary = {
@@ -1645,13 +1663,31 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
 
     const skip = (page - 1) * limit;
 
-    const [items, total, summaryRows] = await Promise.all([
+    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
       PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
       PaymentHistory.countDocuments(query),
       PaymentHistory.aggregate([
         { $match: query },
         { $group: { _id: "$status", count: { $sum: 1 } } },
       ]),
+      PaymentHistory.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+            },
+            notPaidCount: {
+              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+      accountId
+        ? Customer.countDocuments({ accountId: String(accountId) })
+        : Customer.countDocuments({}),
     ]);
 
     const statusSummary = {
@@ -1667,6 +1703,11 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
     }
 
     const resolveCustomer = await buildCustomerResolver(items);
+    const totals = totalsRow?.[0] || {
+      totalAmount: 0,
+      pendingCount: 0,
+      notPaidCount: 0,
+    };
 
     return res.status(200).json({
       success: true,
