@@ -443,6 +443,142 @@ export const getResolvedTicketsList = async ({
   return ChatRoom.aggregate(pipeline);
 };
 
+export const getLatestTicketsList = async ({
+  accountId,
+  limit = 5,
+} = {}) => {
+  const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+  const pipeline = [];
+
+  if (accountId) {
+    const customersCollection = Customer.collection.name;
+    pipeline.push(
+      {
+        $lookup: {
+          from: customersCollection,
+          localField: "customer",
+          foreignField: "_id",
+          as: "customerDoc",
+        },
+      },
+      {
+        $unwind: {
+          path: "$customerDoc",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      { $match: { "customerDoc.accountId": String(accountId) } }
+    );
+  } else {
+    pipeline.push(
+      {
+        $lookup: {
+          from: Customer.collection.name,
+          localField: "customer",
+          foreignField: "_id",
+          as: "customerDoc",
+        },
+      },
+      {
+        $unwind: {
+          path: "$customerDoc",
+          preserveNullAndEmptyArrays: true,
+        },
+      }
+    );
+  }
+
+  pipeline.push(
+    {
+      $lookup: {
+        from: Admin.collection.name,
+        localField: "assignedStaff",
+        foreignField: "_id",
+        as: "assignedStaffDoc",
+      },
+    },
+    {
+      $unwind: {
+        path: "$assignedStaffDoc",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: FranchiseAdmin.collection.name,
+        localField: "assignedFranchiseAdmin",
+        foreignField: "_id",
+        as: "assignedFranchiseAdminDoc",
+      },
+    },
+    {
+      $unwind: {
+        path: "$assignedFranchiseAdminDoc",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    { $sort: { updatedAt: -1, createdAt: -1 } },
+    { $limit: safeLimit },
+    {
+      $project: {
+        _id: 0,
+        ticketId: "$_id",
+        status: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        lastMessageAt: 1,
+        ticketName: {
+          $cond: [
+            { $and: [{ $ne: ["$lastMessage", null] }, { $ne: ["$lastMessage", ""] }] },
+            "$lastMessage",
+            "Customer Support Chat",
+          ],
+        },
+        customer: {
+          _id: "$customerDoc._id",
+          name: {
+            $ifNull: [
+              "$customerDoc.fullName",
+              {
+                $ifNull: [
+                  "$customerDoc.userName",
+                  {
+                    $trim: {
+                      input: {
+                        $concat: [
+                          { $ifNull: ["$customerDoc.firstName", ""] },
+                          " ",
+                          { $ifNull: ["$customerDoc.lastName", ""] },
+                        ],
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          phoneNumber: { $ifNull: ["$customerDoc.phoneNumber", "$customerDoc.mobile"] },
+          email: { $ifNull: ["$customerDoc.emailId", "$customerDoc.email"] },
+          accountId: "$customerDoc.accountId",
+        },
+        assignedStaff: {
+          _id: "$assignedStaffDoc._id",
+          name: "$assignedStaffDoc.name",
+          email: "$assignedStaffDoc.email",
+        },
+        assignedFranchiseAdmin: {
+          _id: "$assignedFranchiseAdminDoc._id",
+          name: "$assignedFranchiseAdminDoc.name",
+          email: "$assignedFranchiseAdminDoc.email",
+          accountId: "$assignedFranchiseAdminDoc.accountId",
+        },
+      },
+    }
+  );
+
+  return ChatRoom.aggregate(pipeline);
+};
+
 export const getMonthlyRevenueAll = ({ startDate }) => {
   const match = { status: "SUCCESS" };
 

@@ -137,6 +137,7 @@ export const getReportSummary = async ({ groupId, accountId, months = 6 }) => {
     totalCollectedRows,
     openTicketCustomersCount,
     resolvedTicketsThisMonthList,
+    latestTickets,
   ] =
     await Promise.all([
       Repo.getMonthlyRevenueByGroup({
@@ -167,6 +168,10 @@ export const getReportSummary = async ({ groupId, accountId, months = 6 }) => {
         startDate: startOfThisMonth,
         endDate: now,
         limit: 25,
+      }),
+      Repo.getLatestTicketsList({
+        accountId,
+        limit: 5,
       }),
     ]);
 
@@ -200,6 +205,7 @@ export const getReportSummary = async ({ groupId, accountId, months = 6 }) => {
     resolvedTicketsThisMonth: resolvedThisMonth,
     resolvedTicketsThisMonthList,
     resolvedTicketsByStaff: resolvedByStaff,
+    latestTickets,
   };
 };
 
