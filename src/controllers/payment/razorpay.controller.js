@@ -989,6 +989,8 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
     }
 
     const skip = (page - 1) * limit;
+    // Used for summary counts; `customer` is fetched above and contains `accountId`.
+    const accountId = customer?.accountId;
 
     const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
       PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -1153,6 +1155,7 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
     }
 
     const skip = (page - 1) * limit;
+    const accountId = customer?.accountId;
 
     const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
       PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -1176,9 +1179,7 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
           },
         },
       ]),
-      accountId
-        ? Customer.countDocuments({ accountId: String(accountId) })
-        : Customer.countDocuments({}),
+      accountId ? Customer.countDocuments({ accountId: String(accountId) }) : Customer.countDocuments({}),
     ]);
 
     const statusSummary = {
@@ -1214,6 +1215,148 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
         const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
         const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
         return rest;
+      }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
+  try {
+    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+
+    if (!bodyUserName) {
+      return res.status(400).json({
+        success: false,
+        message: "userName is required",
+      });
+    }
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const planName = req.query.planName?.trim();
+    const status = req.query.status?.trim();
+    const date = req.query.date?.trim();
+    const fromDate = req.query.fromDate?.trim();
+    const toDate = req.query.toDate?.trim();
+    const profileId = req.query.profileId?.trim();
+
+    // Optional customer lookup for response mapping (doesn't control filtering).
+    const customer = await Customer.findOne({
+      userName: { $regex: `^${escapeRegex(bodyUserName)}$`, $options: "i" },
+    })
+      .select("_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    const userNameRegex = {
+      $regex: `^${escapeRegex(bodyUserName)}$`,
+      $options: "i",
+    };
+
+    // Filter using the same fields that exist in PaymentHistory documents.
+    const orClauses = [
+      { paidByUserName: userNameRegex },
+      { paidByName: userNameRegex },
+    ];
+    if (customer?._id) {
+      orClauses.push({ paidByCustomerId: customer._id });
+    }
+
+    const query = { $or: orClauses };
+
+    if (planName) query.planName = { $regex: planName, $options: "i" };
+    if (profileId) query.profileId = String(profileId);
+
+    if (status) {
+      const upperStatus = status.toUpperCase();
+      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+        query.status = upperStatus;
+      }
+    }
+
+    if (date || fromDate || toDate) {
+      query.createdAt = {};
+      if (date) {
+        const start = new Date(date);
+        const end = new Date(date);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$gte = start;
+        query.createdAt.$lte = end;
+      } else {
+        if (fromDate) query.createdAt.$gte = new Date(fromDate);
+        if (toDate) {
+          const end = new Date(toDate);
+          end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total, summaryRows, totalsRow] = await Promise.all([
+      PaymentHistory.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      PaymentHistory.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+            pendingCount: {
+              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+            },
+            notPaidCount: {
+              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+    ]);
+
+    const statusSummary = { PENDING: 0, SUCCESS: 0, FAILED: 0 };
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) {
+        statusSummary[row._id] = row.count;
+      }
+    }
+
+    const customerSnapshot = toCustomerSnapshot(customer);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        planName: planName || null,
+        status: status || null,
+        date: date || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        profileId: profileId || null,
+        userName: bodyUserName,
+      },
+      summary: statusSummary,
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
+        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+        return {
+          ...rest,
+          // Helpful for admin verification.
+          paidByUserName: mapped?.paidBy?.userName || null,
+          paidByName: mapped?.paidBy?.name || null,
+        };
       }),
     });
   } catch (error) {

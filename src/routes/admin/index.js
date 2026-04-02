@@ -21,10 +21,12 @@ router.use(verifyJWT);
 // Dashboard routes have their own role checks defined in dashboard.routes.js
 router.use("/dashboard", dashboardIndex);
 
+// Payment history endpoints are protected inside their own module
+router.use("/", adminCustomerRoutes);
+
 router.use(allowRoles("ADMIN", "SUPER_ADMIN"));
 // Protect other admin routes
 router.use("/", adminTicketRoutes);
-router.use("/", adminCustomerRoutes);
 router.use("/", adminRoutes);         // /dashboard
 
 export default router;
