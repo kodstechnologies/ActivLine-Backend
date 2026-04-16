@@ -1,13 +1,30 @@
 import nodemailer from "nodemailer";
 import ApiError from "./ApiError.js";
 
+const mailHost = process.env.MAIL_HOST;
+const mailPort = Number(process.env.MAIL_PORT || 587);
+const mailUser = process.env.MAIL_USER;
+// Gmail app passwords are often copied with spaces, normalize safely.
+const mailPass = (process.env.MAIL_PASS || "").replace(/\s+/g, "");
+const mailFromName = process.env.MAIL_FROM_NAME || "ActivLine Support";
+const useSecure =
+  String(process.env.MAIL_SECURE || "").toLowerCase() === "true"
+    ? true
+    : mailPort === 465;
+
+if (!mailHost || !mailPort || !mailUser || !mailPass) {
+  console.error(
+    "❌ Mail config missing. Required: MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS"
+  );
+}
+
 const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  secure: false, // TLS (587)
+  host: mailHost,
+  port: mailPort,
+  secure: useSecure,
   auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS,
+    user: mailUser,
+    pass: mailPass,
   },
 });
 
@@ -26,7 +43,7 @@ transporter.verify((error, success) => {
 export const sendOTPEmail = async ({ to, otp, purpose = "Profile Update" }) => {
   try {
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: `${purpose} OTP Verification`,
       html: `
@@ -59,7 +76,7 @@ export const sendCustomerWelcomeEmail = async ({
 }) => {
   try {
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: "Your ActivLine account is created",
       html: `
@@ -95,7 +112,7 @@ export const sendAdminStaffCreatedEmail = async ({
 }) => {
   try {
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: "Your ActivLine staff account is created",
       html: `
@@ -137,7 +154,7 @@ export const sendAdminStaffProfileUpdatedEmail = async ({
         : "Profile details";
 
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: "Your ActivLine staff profile was updated",
       html: `
@@ -174,7 +191,7 @@ export const sendFranchiseAdminCreatedEmail = async ({
 }) => {
   try {
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: "Your ActivLine franchise admin account is created",
       html: `
@@ -223,7 +240,7 @@ export const sendFranchiseAdminProfileUpdatedEmail = async ({
       : "";
 
     await transporter.sendMail({
-      from: `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`,
+      from: `"${mailFromName}" <${mailUser}>`,
       to,
       subject: "Your ActivLine franchise admin profile was updated",
       html: `
