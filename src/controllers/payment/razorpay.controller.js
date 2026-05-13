@@ -13,6 +13,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import cloudinary from "../../utils/cloudinary.js";
+import puppeteer from "puppeteer";
+import { generateInvoiceHTML } from "../../utils/invoiceTemplate.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1587,161 +1589,37 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
 
-    const doc = new PDFDocument({ size: "A4", margin: 40 });
-    const chunks = [];
-    doc.on("data", (chunk) => chunks.push(chunk));
-
-    const primary = "#0D3B66";
-    const accent = "#FAF0CA";
-    const muted = "#6B7280";
-
-    doc.rect(0, 0, doc.page.width, 110).fill(primary);
-    doc.fillColor("white").fontSize(24).text("INVOICE", 0, 35, { align: "right" });
-
-    const logoPath = path.join(__dirname, "..", "..", "logo", "activLine_logo.jpg");
-    if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 40, 25, { width: 110 });
-    }
-
-    doc.fillColor("black");
-    const infoTop = 140;
-
-    doc
-      .fontSize(11)
-      .fillColor(muted)
-      .text("Invoice For", 40, infoTop);
-    doc
-      .fontSize(13)
-      .fillColor("black")
-      .text(paymentData.customer?.name || "Customer", 40, infoTop + 16);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`User Name: ${paymentData.customer?.userName || "-"}`, 40, infoTop + 36);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Account ID: ${paymentData.accountId || "-"}`, 40, infoTop + 52);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Group ID: ${paymentData.groupId || "-"}`, 40, infoTop + 68);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Profile ID: ${paymentData.profileId || "-"}`, 40, infoTop + 84);
-
-    const metaLeft = 340;
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text("Invoice Details", metaLeft, infoTop);
-    doc
-      .fontSize(11)
-      .fillColor("black")
-      .text(`Payment ID: ${paymentData.paymentId}`, metaLeft, infoTop + 16);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Order ID: ${paymentData.orderId || "-"}`, metaLeft, infoTop + 34);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(
-        `Razorpay Payment ID: ${paymentData.razorpayPaymentId || "-"}`,
-        metaLeft,
-        infoTop + 50
-      );
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Created At: ${formatDate(paymentData.createdAt)}`, metaLeft, infoTop + 66);
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Paid At: ${formatDate(paymentData.paidAt)}`, metaLeft, infoTop + 82);
-
-    doc.moveTo(40, infoTop + 110).lineTo(555, infoTop + 110).stroke("#E5E7EB");
-
-    const tableTop = infoTop + 130;
-    doc
-      .rect(40, tableTop, 515, 28)
-      .fill(accent)
-      .stroke("#E5E7EB");
-    doc
-      .fillColor(primary)
-      .fontSize(11)
-      .text("Description", 50, tableTop + 8)
-      .text("Qty", 360, tableTop + 8)
-      .text("Amount", 430, tableTop + 8);
-
-    doc
-      .fillColor("black")
-      .fontSize(11)
-      .text(paymentData.planName || "Plan", 50, tableTop + 40)
-      .text("1", 365, tableTop + 40)
-      .text(
-        `${paymentData.amount || 0} ${paymentData.currency || "INR"}`,
-        430,
-        tableTop + 40
-      );
-
-    const totalsTop = tableTop + 85;
-    doc.rect(360, totalsTop, 195, 80).stroke("#E5E7EB");
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text("Subtotal", 370, totalsTop + 12)
-      .text("Taxes", 370, totalsTop + 32)
-      .text("Total", 370, totalsTop + 52);
-    doc
-      .fontSize(11)
-      .fillColor("black")
-      .text(`${paymentData.amount || 0} ${paymentData.currency || "INR"}`, 450, totalsTop + 12)
-      .text("0", 450, totalsTop + 32)
-      .text(`${paymentData.amount || 0} ${paymentData.currency || "INR"}`, 450, totalsTop + 52);
-
-    doc
-      .fontSize(10)
-      .fillColor(muted)
-      .text(`Status: ${paymentData.status || "-"}`, 40, totalsTop + 15);
-
-    const detailsTop = totalsTop + 110;
-    if (paymentData.plan?.details) {
-      doc
-        .fontSize(12)
-        .fillColor(primary)
-        .text("Plan Details", 40, detailsTop);
-      doc.moveDown(0.5);
-      doc.fontSize(10).fillColor("black");
-      const planDetails = paymentData.plan.details || {};
-      const sections = Object.entries(planDetails);
-      for (const [sectionName, rows] of sections) {
-        doc.fontSize(10).fillColor(primary).text(String(sectionName));
-        doc.fontSize(9).fillColor("black");
-        if (Array.isArray(rows)) {
-          for (const row of rows) {
-            const label = row?.property || "";
-            const value = row?.value ?? "";
-            doc.text(`${label}: ${value}`);
-          }
-        }
-        doc.moveDown(0.4);
-      }
-    }
-
-    doc
-      .fontSize(9)
-      .fillColor(muted)
-      .text("Thank you for your payment.", 0, doc.page.height - 60, {
-        align: "center",
-      });
-    doc.end();
-
-    const pdfBuffer = await new Promise((resolve, reject) => {
-      doc.on("end", () => resolve(Buffer.concat(chunks)));
-      doc.on("error", reject);
+    const htmlContent = generateInvoiceHTML({
+      paymentId: paymentData.paymentId,
+      date: paymentData.paidAt || paymentData.createdAt,
+      planName: paymentData.planName,
+      amount: paymentData.amount,
+      customer: paymentData.customer,
+      plan: paymentData.plan,
+      previousBalance: 0,
+      taxRate: 0.09
     });
+
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+    const pdfUint8Array = await page.pdf({
+      width: '595px',
+      height: '986px',
+      printBackground: true,
+      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
+      pageRanges: '1'
+    });
+
+    await browser.close();
+
+    // Convert Puppeteer's Uint8Array to a Node.js Buffer for Cloudinary/streamifier
+    const pdfBuffer = Buffer.from(pdfUint8Array);
 
     const uploadResult = await uploadToCloudinary({
       buffer: pdfBuffer,
@@ -1760,7 +1638,6 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
       success: true,
       message: "Invoice uploaded successfully",
       downloadUrl: uploadResult.secure_url,
-      
       publicId: uploadResult.public_id,
     });
   } catch (error) {
