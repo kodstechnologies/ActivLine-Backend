@@ -93,10 +93,10 @@ export const generateInvoiceHTML = (data) => {
         .decor-circle-yellow { position: absolute; top: -40px; right: 40px; width: 80px; height: 80px; background-color: #FFEB3B; border-radius: 50%; z-index: 0; }
 
         /* Bottom Decor */
-        .decor-circle-bottom-1 { position: absolute; bottom: 20px; left: 50px; width: 60px; height: 30px; background-color: #FFEB3B; border-radius: 15px; z-index: 1; }
-        .decor-circle-bottom-2 { position: absolute; bottom: 100px; right: -50px; width: 150px; height: 150px; background-color: #FFEB3B; border-radius: 50%; z-index: 1; }
-        .decor-circle-bottom-3 { position: absolute; bottom: 30px; left: 130px; width: 20px; height: 20px; background-color: #E91E63; border-radius: 50%; z-index: 1; }
-        .decor-circle-bottom-4 { position: absolute; bottom: 40px; left: 20px; width: 15px; height: 15px; background-color: #BDBDBD; border-radius: 50%; z-index: 1; }
+        .decor-circle-bottom-1 { position: absolute; bottom: 5px; left: 50px; width: 60px; height: 30px; background-color: #FFEB3B; border-radius: 15px; z-index: -1; }
+        .decor-circle-bottom-2 { position: absolute; bottom: -50px; right: -80px; width: 200px; height: 200px; background-color: #FFEB3B; border-radius: 50%; z-index: -1; }
+        .decor-circle-bottom-3 { position: absolute; bottom: 10px; left: 130px; width: 20px; height: 20px; background-color: #E91E63; border-radius: 50%; z-index: -1; }
+        .decor-circle-bottom-4 { position: absolute; bottom: 15px; left: 20px; width: 15px; height: 15px; background-color: #BDBDBD; border-radius: 50%; z-index: -1; }
 
         .table-border {
           border: 1px solid #BDBDBD;
@@ -266,53 +266,58 @@ export const generateInvoiceHTML = (data) => {
         <!-- Bottom Layout -->
         <div class="flex justify-between gap-4 flex-1">
           
-          <!-- Left Column (Bank Details & Paytm) -->
-          <div class="w-[45%] flex flex-col gap-2">
+          <!-- Left Column (Bank Details & Paytm Combined Box) -->
+          <div class="w-[45%] flex flex-col border border-gray-300 rounded-xl overflow-hidden shadow-sm">
             
-            <!-- Bank Details Box -->
-            <div class="border rounded-lg overflow-hidden" style="border-color: #E91E63; background: #fff;">
-              <div class="bg-[#E91E63] text-white text-center font-bold text-xs py-1">Company's Bank Account Details</div>
-              <div class="bg-[#F06292] text-white py-1 px-2">
-                <div class="item-row"><div class="item-label text-pink-100">Account Name</div><div class="item-value">: ACTIVLINE FIBERNET PRIVATE LIMITED</div></div>
-                <div class="item-row"><div class="item-label text-pink-100">Bank Name</div><div class="item-value">: KOTAK MAHINDRA BANK</div></div>
-                <div class="item-row"><div class="item-label text-pink-100">A/C No.</div><div class="item-value">: 8002586488</div></div>
-                <div class="item-row"><div class="item-label text-pink-100">IFSC Code</div><div class="item-value">: KKBK0008083</div></div>
-                <div class="item-row"><div class="item-label text-pink-100">Branch</div><div class="item-value">: Monarch Serenity, R. K. Hedge Nagar</div></div>
+            <!-- Bank Details (Top Section) -->
+            <div class="bg-[#E91E63] text-white flex flex-col pb-1">
+              <div class="font-bold text-center text-xs py-1 border-b border-white/50 mb-1 mx-2">Company's Bank Account Details</div>
+              <div class="px-2 py-1 text-[9px] flex flex-col gap-0.5">
+                <div class="flex"><div class="w-[35%] text-pink-100">Account Name</div><div class="w-[65%]">: ACTIVLINE FIBERNET PRIVATE LIMITED</div></div>
+                <div class="flex"><div class="w-[35%] text-pink-100">Bank Name</div><div class="w-[65%]">: KOTAK MAHINDRA BANK</div></div>
+                <div class="flex"><div class="w-[35%] text-pink-100">A/C No.</div><div class="w-[65%]">: 8002586488</div></div>
+                <div class="flex"><div class="w-[35%] text-pink-100">IFSC Code</div><div class="w-[65%]">: KKBK0008083</div></div>
+                <div class="flex"><div class="w-[35%] text-pink-100">Branch</div><div class="w-[65%] leading-tight">: Monarch Serenity, R. K. Hedge Nagar, Thanisandra Main Road, Bangalore, Karnataka 560077</div></div>
               </div>
-              <div class="bg-[#D81B60] text-white text-[8px] p-2 text-center leading-tight">
+              <div class="border-t border-white/50 mx-2 mt-1 pt-1 text-[8px] text-center leading-tight pb-1">
                 **DD/CHQ need to be in favour of ACTIVLINE FIBERNET PRIVATE LIMITED
               </div>
             </div>
 
-            <!-- Paytm Box -->
-            <div class="border border-gray-300 rounded-lg p-2 flex bg-white">
-              <div class="w-[55%] flex flex-col justify-between pr-2 border-r border-gray-200">
-                <div class="font-bold text-[#012B72] text-xl tracking-tight leading-none mt-1">Paytm</div>
-                <div class="text-[7px] text-gray-800 font-bold mb-2">Accepted Here</div>
-                <div class="text-[7px] text-gray-800 leading-tight">Scan in Paytm App for<br/>
-                  <span class="font-bold text-blue-800">Wallet</span> <span class="font-bold text-green-600">UPI</span>
+            <!-- Paytm Box (Bottom Section) -->
+            <div class="bg-[#f5f5f5] p-3 flex flex-1">
+              <!-- Left Side: Logos & Badges -->
+              <div class="w-[60%] flex flex-col pr-2">
+                <div class="bg-white px-2 py-1 flex flex-col justify-center items-center rounded-sm w-[80%] mx-auto shadow-sm">
+                   <div class="font-black text-[#012B72] text-xl tracking-tight leading-none">Paytm</div>
+                   <div class="text-[7px] text-gray-800 font-bold">Accepted Here</div>
                 </div>
-                <div class="mt-2 w-full">
-                  <div class="text-[6px] text-gray-700 font-bold mb-1">Payment Method</div>
-                  <div class="flex flex-wrap gap-0.5">
-                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">NEFT</span>
-                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">RTGS</span>
-                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CARD</span>
-                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CHEQ</span>
-                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CASH</span>
+                <div class="mt-4 text-[9px] text-black mb-1">Scan in Paytm App for</div>
+                <div class="flex items-center gap-1 text-[8px]">
+                  <span class="font-bold text-[#012B72]">Paytm</span> Wallet <span class="font-bold text-blue-500 italic">RuPay</span> Card <span class="font-bold text-green-600">UPI</span>
+                </div>
+                
+                <div class="mt-auto pt-2">
+                  <div class="text-[8px] text-black mb-1">Payment Method</div>
+                  <div class="flex flex-wrap gap-1">
+                    <span class="bg-[#E91E63] text-white px-1 py-[1px] text-[6px] rounded-sm font-bold">NEFT</span>
+                    <span class="bg-[#E91E63] text-white px-1 py-[1px] text-[6px] rounded-sm font-bold">RTGS</span>
+                    <span class="bg-[#E91E63] text-white px-1 py-[1px] text-[6px] rounded-sm font-bold">CARD</span>
+                    <span class="bg-[#E91E63] text-white px-1 py-[1px] text-[6px] rounded-sm font-bold">CHEQ</span>
+                    <span class="bg-[#E91E63] text-white px-1 py-[1px] text-[6px] rounded-sm font-bold">CASH</span>
                   </div>
                 </div>
               </div>
-              <div class="w-[45%] flex flex-col items-center pl-2">
-                <div class="text-[7px] font-bold text-center leading-tight mb-1">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
-                <div class="border-2 border-blue-400 p-0.5 rounded-md bg-blue-50 w-[70px] h-[70px] flex flex-col">
-                   <div class="bg-blue-500 text-white text-[5px] text-center font-bold">Paytm</div>
-                   <div class="bg-white flex-1 flex items-center justify-center text-[5px] text-gray-300">[QR CODE]</div>
+              
+              <!-- Right Side: QR Code -->
+              <div class="w-[40%] flex flex-col items-center justify-center">
+                <div class="font-bold text-[8px] text-center leading-tight mb-2">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
+                <div class="bg-white p-1 rounded-sm shadow-sm flex items-center justify-center border border-blue-200">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR" class="w-[60px] h-[60px] object-contain opacity-40" />
                 </div>
-                <div class="text-[6px] font-bold text-gray-800 mt-1">Pay via number also</div>
+                <div class="text-[8px] text-black mt-2 text-center">Pay via number also</div>
               </div>
             </div>
-            
           </div>
 
           <!-- Product Table and Company Info -->
@@ -390,8 +395,14 @@ export const generateInvoiceHTML = (data) => {
           </div>
         </div>
 
-        <div class="mt-2 text-center text-[8px] font-bold text-gray-600">
-          Note : This is Computer Generated Invoice No signature Required
+        <div class="mt-2 flex justify-between items-center relative z-10">
+          <div class="w-[20%]"></div>
+          <div class="text-center text-[8px] font-bold text-gray-600 flex-1">
+            Note : This is Computer Generated Invoice No signature Required
+          </div>
+          <div class="w-[20%] flex items-center justify-end text-[8px] text-[#4CAF50] font-black tracking-tight">
+            <span class="text-[14px] mr-0.5 leading-none">🍃</span> go<span class="text-[#388E3C] ml-0.5">GREEN</span>
+          </div>
         </div>
 
       </div>
