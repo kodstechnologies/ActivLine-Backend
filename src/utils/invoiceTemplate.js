@@ -81,16 +81,16 @@ export const generateInvoiceHTML = (data) => {
           position: relative;
         }
         .page-container {
-          padding: 30px;
+          padding: 16px 30px;
           height: 100%;
           display: flex;
           flex-direction: column;
         }
         /* Top Decor */
-        .decor-circle-1 { position: absolute; top: -50px; left: 100px; width: 150px; height: 150px; background-color: #E91E63; border-radius: 50%; z-index: 1; }
-        .decor-circle-2 { position: absolute; top: -20px; left: 200px; width: 100px; height: 100px; background-color: #E0E0E0; border-radius: 50%; z-index: 0; }
-        .decor-circle-3 { position: absolute; top: 40px; left: 60px; width: 80px; height: 80px; background-color: #333333; border-radius: 50%; z-index: 2; }
-        .decor-circle-4 { position: absolute; top: -10px; left: -10px; width: 120px; height: 120px; background-color: #F8BBD0; border-radius: 50%; z-index: 0; }
+        .decor-circle-dark-grey { position: absolute; top: 50px; left: 40px; width: 50px; height: 50px; background-color: #333333; border-radius: 50%; z-index: 2; }
+        .decor-circle-bright-pink { position: absolute; top: -30px; left: 70px; width: 110px; height: 110px; background-color: #E91E63; border-radius: 50%; z-index: 1; }
+        .decor-circle-light-grey { position: absolute; top: -20px; left: 160px; width: 55px; height: 55px; background-color: #E0E0E0; border-radius: 50%; z-index: 0; }
+        .decor-circle-yellow { position: absolute; top: -40px; right: 40px; width: 80px; height: 80px; background-color: #FFEB3B; border-radius: 50%; z-index: 0; }
 
         /* Bottom Decor */
         .decor-circle-bottom-1 { position: absolute; bottom: 20px; left: 50px; width: 60px; height: 30px; background-color: #FFEB3B; border-radius: 15px; z-index: 1; }
@@ -133,8 +133,8 @@ export const generateInvoiceHTML = (data) => {
         .bg-red-brown { background: linear-gradient(45deg, #E53935 50%, #4E342E 50%); }
         .bg-orange-brown { background: linear-gradient(45deg, #FB8C00 50%, #4E342E 50%); }
         
-        .item-row { display: flex; font-size: 10px; padding: 3px 8px; }
-        .item-label { width: 35%; color: #555; }
+        .item-row { display: flex; font-size: 9px; padding: 2px 8px; }
+        .item-label { width: 35%; color: #555; white-space: nowrap; }
         .item-value { width: 65%; font-weight: 500; }
         
         .product-table th, .product-table td {
@@ -147,10 +147,10 @@ export const generateInvoiceHTML = (data) => {
     </head>
     <body>
       <!-- Decorations -->
-      <div class="decor-circle-1"></div>
-      <div class="decor-circle-2"></div>
-      <div class="decor-circle-3"></div>
-      <div class="decor-circle-4"></div>
+      <div class="decor-circle-dark-grey"></div>
+      <div class="decor-circle-bright-pink"></div>
+      <div class="decor-circle-light-grey"></div>
+      <div class="decor-circle-yellow"></div>
       <div class="decor-circle-bottom-1"></div>
       <div class="decor-circle-bottom-2"></div>
       <div class="decor-circle-bottom-3"></div>
@@ -158,22 +158,23 @@ export const generateInvoiceHTML = (data) => {
 
       <div class="page-container relative z-10">
         
-        <!-- Header Section -->
-        <div class="flex justify-between items-start mt-24 mb-6">
-          <!-- Logo -->
-          <div class="flex flex-col items-center ml-10">
-            ${logoHtml}
-          </div>
-          
+        <!-- Top Header (TAX INVOICE) -->
+        <div class="flex justify-end mt-10 mb-2">
           <div class="text-right">
-            <h1 class="text-3xl font-black text-black m-0 leading-tight">TAX INVOICE</h1>
-            <div class="text-[10px] font-bold text-gray-800">Original for Recipient</div>
+            <h1 class="text-2xl font-black text-black m-0 leading-tight">TAX INVOICE</h1>
+            <div class="text-[8px] font-bold text-gray-800">Original for Recipient</div>
           </div>
         </div>
 
-        <!-- Invoice Details Box -->
-        <div class="flex justify-end mb-4">
-          <div class="table-border w-2/3">
+        <!-- Logo & Invoice Details Row -->
+        <div class="flex justify-between items-center mb-3">
+          <!-- Logo -->
+          <div class="w-[30%] flex justify-center">
+            ${logoHtml}
+          </div>
+
+          <!-- Invoice Details Box -->
+          <div class="table-border w-[60%]">
             <div class="header-blue w-1/2">Invoice Details</div>
             <div class="flex p-2">
               <div class="w-1/2">
@@ -194,7 +195,7 @@ export const generateInvoiceHTML = (data) => {
         </div>
 
         <!-- Address Boxes -->
-        <div class="flex justify-between mb-8 gap-4">
+        <div class="flex justify-between mb-4 gap-4">
           <!-- Installation Address -->
           <div class="table-border w-[48%]">
             <div class="header-pink">Installation Address</div>
@@ -210,24 +211,24 @@ export const generateInvoiceHTML = (data) => {
           <!-- Billing Address -->
           <div class="table-border w-[48%]">
             <div class="header-dark">Billing Address</div>
-            <div class="flex p-2">
-              <div class="w-1/2">
-                <div class="item-row"><div class="item-label">State Name</div><div class="item-value">: </div></div>
-                <div class="item-row"><div class="item-label">GSTIN</div><div class="item-value">: </div></div>
-                <div class="item-row"><div class="item-label">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
-                <div class="item-row"><div class="item-label">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
-                <div class="item-row"><div class="item-label">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
+            <div class="p-2">
+              <div class="flex">
+                <div class="w-[65%]"><div class="item-row"><div class="item-label">State Name</div><div class="item-value">: </div></div></div>
+                <div class="w-[35%]"><div class="item-row"><div class="item-label">Code</div><div class="item-value">: </div></div></div>
               </div>
-              <div class="w-1/2">
-                <div class="item-row"><div class="item-label">Code</div><div class="item-value">: </div></div>
-                <div class="item-row"><div class="item-label">LUT No</div><div class="item-value">: </div></div>
+              <div class="flex">
+                <div class="w-[65%]"><div class="item-row"><div class="item-label">GSTIN</div><div class="item-value">: </div></div></div>
+                <div class="w-[35%]"><div class="item-row"><div class="item-label">LUT No</div><div class="item-value">: </div></div></div>
               </div>
+              <div class="item-row"><div class="item-label">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
+              <div class="item-row"><div class="item-label">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
+              <div class="item-row"><div class="item-label">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
             </div>
           </div>
         </div>
 
         <!-- Bubbles -->
-        <div class="flex justify-between items-center mb-8 px-2 relative">
+        <div class="flex justify-between items-center mb-4 px-2 relative">
           
           <div class="teardrop-container bg-red-brown">
             <div class="teardrop-inner">
@@ -265,11 +266,13 @@ export const generateInvoiceHTML = (data) => {
         <!-- Bottom Layout -->
         <div class="flex justify-between gap-4 flex-1">
           
-          <!-- Bank Details -->
-          <div class="table-border w-[45%] flex flex-col justify-between" style="border-color: #E91E63; background: #fff;">
-            <div>
+          <!-- Left Column (Bank Details & Paytm) -->
+          <div class="w-[45%] flex flex-col gap-2">
+            
+            <!-- Bank Details Box -->
+            <div class="border rounded-lg overflow-hidden" style="border-color: #E91E63; background: #fff;">
               <div class="bg-[#E91E63] text-white text-center font-bold text-xs py-1">Company's Bank Account Details</div>
-              <div class="bg-[#F06292] text-white p-2">
+              <div class="bg-[#F06292] text-white py-1 px-2">
                 <div class="item-row"><div class="item-label text-pink-100">Account Name</div><div class="item-value">: ACTIVLINE FIBERNET PRIVATE LIMITED</div></div>
                 <div class="item-row"><div class="item-label text-pink-100">Bank Name</div><div class="item-value">: KOTAK MAHINDRA BANK</div></div>
                 <div class="item-row"><div class="item-label text-pink-100">A/C No.</div><div class="item-value">: 8002586488</div></div>
@@ -280,35 +283,41 @@ export const generateInvoiceHTML = (data) => {
                 **DD/CHQ need to be in favour of ACTIVLINE FIBERNET PRIVATE LIMITED
               </div>
             </div>
-            
-            <div class="p-2 text-center">
-              <div class="font-bold text-[#012B72] text-xl tracking-tight mb-1">Paytm <span class="text-xs font-normal">Accepted Here</span></div>
-              <div class="flex justify-center items-center text-[8px] text-gray-500 mb-2 gap-1">
-                Scan in Paytm App for <span class="font-bold text-blue-800">Wallet</span> <span class="font-bold text-blue-400">UPI</span>
-              </div>
-              <!-- Fake QR -->
-              <div class="border border-blue-400 rounded p-1 inline-block bg-blue-50">
-                <div class="text-[8px] font-bold text-center mb-1">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
-                <div class="bg-white p-1 border border-gray-300 w-24 h-24 mx-auto flex items-center justify-center text-gray-300 text-xs">[QR CODE]</div>
-              </div>
-              <div class="text-[9px] mt-2 font-bold text-gray-700">Pay via number also</div>
-              
-              <div class="flex justify-between items-center mt-3 text-[7px] text-white font-bold">
-                <div class="text-gray-700 w-1/3 text-left">Payment Method</div>
-                <div class="w-2/3 flex justify-end gap-1">
-                  <span class="bg-[#E91E63] px-1 py-0.5 rounded-sm">NEFT</span>
-                  <span class="bg-[#E91E63] px-1 py-0.5 rounded-sm">RTGS</span>
-                  <span class="bg-[#E91E63] px-1 py-0.5 rounded-sm">CARD</span>
-                  <span class="bg-[#E91E63] px-1 py-0.5 rounded-sm">CHEQ</span>
-                  <span class="bg-[#E91E63] px-1 py-0.5 rounded-sm">CASH</span>
+
+            <!-- Paytm Box -->
+            <div class="border border-gray-300 rounded-lg p-2 flex bg-white">
+              <div class="w-[55%] flex flex-col justify-between pr-2 border-r border-gray-200">
+                <div class="font-bold text-[#012B72] text-xl tracking-tight leading-none mt-1">Paytm</div>
+                <div class="text-[7px] text-gray-800 font-bold mb-2">Accepted Here</div>
+                <div class="text-[7px] text-gray-800 leading-tight">Scan in Paytm App for<br/>
+                  <span class="font-bold text-blue-800">Wallet</span> <span class="font-bold text-green-600">UPI</span>
+                </div>
+                <div class="mt-2 w-full">
+                  <div class="text-[6px] text-gray-700 font-bold mb-1">Payment Method</div>
+                  <div class="flex flex-wrap gap-0.5">
+                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">NEFT</span>
+                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">RTGS</span>
+                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CARD</span>
+                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CHEQ</span>
+                    <span class="bg-[#E91E63] text-white px-[3px] py-[1px] text-[5px] rounded-sm">CASH</span>
+                  </div>
                 </div>
               </div>
+              <div class="w-[45%] flex flex-col items-center pl-2">
+                <div class="text-[7px] font-bold text-center leading-tight mb-1">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
+                <div class="border-2 border-blue-400 p-0.5 rounded-md bg-blue-50 w-[70px] h-[70px] flex flex-col">
+                   <div class="bg-blue-500 text-white text-[5px] text-center font-bold">Paytm</div>
+                   <div class="bg-white flex-1 flex items-center justify-center text-[5px] text-gray-300">[QR CODE]</div>
+                </div>
+                <div class="text-[6px] font-bold text-gray-800 mt-1">Pay via number also</div>
+              </div>
             </div>
+            
           </div>
 
           <!-- Product Table and Company Info -->
           <div class="w-[55%] flex flex-col">
-            <table class="product-table w-full border-collapse mb-4">
+            <table class="product-table w-full border-collapse mb-2">
               <thead>
                 <tr>
                   <th>Product Name (HSN/SAC)</th>
@@ -361,12 +370,12 @@ export const generateInvoiceHTML = (data) => {
         </div>
 
         <!-- Footer -->
-        <div class="mt-4 text-[9px] flex justify-between font-bold text-[#E91E63]">
+        <div class="mt-2 text-[9px] flex justify-between font-bold text-[#E91E63]">
           <div>Payment Terms</div>
           <div>Thanks for choosing ACTIVLINE FIBERNET PRIVATE LIMITED</div>
         </div>
 
-        <div class="mt-6 flex justify-between items-end">
+        <div class="mt-3 flex justify-between items-end">
           <div class="w-2/3">
             <div class="font-bold text-[#E91E63] text-sm mb-1">Declaration:</div>
             <div class="text-[8px] text-gray-700 leading-tight">
@@ -381,7 +390,7 @@ export const generateInvoiceHTML = (data) => {
           </div>
         </div>
 
-        <div class="mt-4 text-center text-[8px] font-bold text-gray-600">
+        <div class="mt-2 text-center text-[8px] font-bold text-gray-600">
           Note : This is Computer Generated Invoice No signature Required
         </div>
 
