@@ -119,7 +119,7 @@ export const generateInvoiceHTML = (data) => {
 
         /* Bottom Decor */
         .decor-circle-bottom-1 { position: absolute; bottom: 5px; left: 50px; width: 60px; height: 30px; background-color: #FFEB3B; border-radius: 15px; z-index: -1; }
-        .decor-circle-bottom-2 { position: absolute; bottom: 350px; right: -50px; width: 100px; height: 100px; background-color: #FFEB3B; border-radius: 50%; z-index: -1; }
+        .decor-circle-bottom-2 { position: absolute; bottom: 325px; right: 0; width: 50px; height: 100px; background-color: #FFEB3B; border-radius: 100px 0 0 100px; z-index: -1; }
         .decor-circle-bottom-3 { position: absolute; bottom: 10px; left: 130px; width: 20px; height: 20px; background-color: #E91E63; border-radius: 50%; z-index: -1; }
         .decor-circle-bottom-4 { position: absolute; bottom: 15px; left: 20px; width: 15px; height: 15px; background-color: #BDBDBD; border-radius: 50%; z-index: -1; }
 
@@ -345,8 +345,8 @@ export const generateInvoiceHTML = (data) => {
           </div>
 
           <!-- Product Table and Company Info -->
-          <div class="w-[55%] flex flex-col">
-            <table class="product-table w-full border-collapse mb-2">
+          <div class="w-[55%] flex flex-col relative z-10">
+            <table class="product-table w-full border-collapse mb-2 bg-white shadow-sm rounded-sm">
               <thead>
                 <tr>
                   <th>Product Name (HSN/SAC)</th>

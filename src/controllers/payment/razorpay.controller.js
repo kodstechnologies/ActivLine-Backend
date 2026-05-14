@@ -1588,7 +1588,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     };
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
-console.log(paymentData,paymentData?.plan?.details)
+// console.log(paymentData,paymentData?.plan?.details)
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
