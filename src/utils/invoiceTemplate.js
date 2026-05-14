@@ -21,8 +21,24 @@ const getLogoBase64 = () => {
   return null;
 }
 
+let cachedPaytmQrBase64 = null;
+const getPaytmQrBase64 = () => {
+  if (cachedPaytmQrBase64) return cachedPaytmQrBase64;
+  try {
+    const qrPath = path.join(__dirname, '..', 'logo', 'Paytm_scaner.png');
+    if (fs.existsSync(qrPath)) {
+      const bitmap = fs.readFileSync(qrPath);
+      cachedPaytmQrBase64 = Buffer.from(bitmap).toString('base64');
+      return cachedPaytmQrBase64;
+    }
+  } catch (e) {
+    console.error('Error loading paytm qr:', e);
+  }
+  return null;
+}
+
 export const generateInvoiceHTML = (data) => {
-  const { paymentId, date, planName, amount, customer, plan, previousBalance = 0, taxRate = 0.09 } = data;
+  const { paymentId, date, planName, amount, planEndDate,customer, plan, previousBalance = 0, taxRate = 0.09 } = data;
 
   // Calculate tax parts
   const rawAmount = parseFloat(amount || 0);
@@ -37,7 +53,9 @@ export const generateInvoiceHTML = (data) => {
   const formattedDate = date ? new Date(date).toLocaleDateString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric'
   }) : '-';
-  
+  const planExpiry=planEndDate?new Date(planEndDate).toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric'
+  }) : '-';
   const dueDate = formattedDate; // In image, due date is same as invoice date or 'Immediate'
   
   const numToWords = (num) => {
@@ -53,6 +71,13 @@ export const generateInvoiceHTML = (data) => {
     ? `<img src="data:image/png;base64,${logoBase64}" alt="Activline" style="height: 50px; object-fit: contain;" />`
     : `<div class="text-[#1A237E] font-black text-3xl tracking-tighter flex items-center">activline</div>`;
 
+  const paytmQrBase64 = getPaytmQrBase64();
+  const qrHtml = paytmQrBase64
+    ? `<img src="data:image/png;base64,${paytmQrBase64}" alt="Paytm QR Scanner" class="w-[80px] object-contain mx-auto" />`
+    : `<div class="bg-white p-1 rounded-sm shadow-sm flex items-center justify-center border border-blue-200">
+         <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR" class="w-[60px] h-[60px] object-contain opacity-40" />
+       </div>`;
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -64,10 +89,10 @@ export const generateInvoiceHTML = (data) => {
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
         @media print {
-          @page { size: 595px 986px; margin: 0; }
+          @page { size: 595px 1080px; margin: 0; }
         }
         html, body {
-          height: 986px;
+          height: 1080px;
           overflow: hidden;
         }
         body {
@@ -94,7 +119,7 @@ export const generateInvoiceHTML = (data) => {
 
         /* Bottom Decor */
         .decor-circle-bottom-1 { position: absolute; bottom: 5px; left: 50px; width: 60px; height: 30px; background-color: #FFEB3B; border-radius: 15px; z-index: -1; }
-        .decor-circle-bottom-2 { position: absolute; bottom: -50px; right: -80px; width: 200px; height: 200px; background-color: #FFEB3B; border-radius: 50%; z-index: -1; }
+        .decor-circle-bottom-2 { position: absolute; bottom: 350px; right: -50px; width: 100px; height: 100px; background-color: #FFEB3B; border-radius: 50%; z-index: -1; }
         .decor-circle-bottom-3 { position: absolute; bottom: 10px; left: 130px; width: 20px; height: 20px; background-color: #E91E63; border-radius: 50%; z-index: -1; }
         .decor-circle-bottom-4 { position: absolute; bottom: 15px; left: 20px; width: 15px; height: 15px; background-color: #BDBDBD; border-radius: 50%; z-index: -1; }
 
@@ -133,9 +158,9 @@ export const generateInvoiceHTML = (data) => {
         .bg-red-brown { background: linear-gradient(45deg, #E53935 50%, #4E342E 50%); }
         .bg-orange-brown { background: linear-gradient(45deg, #FB8C00 50%, #4E342E 50%); }
         
-        .item-row { display: flex; font-size: 9px; padding: 2px 8px; }
-        .item-label { width: 35%; color: #555; white-space: nowrap; }
-        .item-value { width: 65%; font-weight: 500; }
+        .item-row { display: flex; font-size: 9px; padding: 2px 4px; }
+        .item-label { color: #555; white-space: nowrap; flex-shrink: 0; }
+        .item-value { font-weight: 500; flex-grow: 1; min-width: 0; }
         
         .product-table th, .product-table td {
           border: 1px solid #E0E0E0;
@@ -174,22 +199,23 @@ export const generateInvoiceHTML = (data) => {
           </div>
 
           <!-- Invoice Details Box -->
-          <div class="table-border w-[60%]">
+          <div class="table-border w-[65%]">
             <div class="header-blue w-1/2">Invoice Details</div>
             <div class="flex p-2">
-              <div class="w-1/2">
-                <div class="item-row"><div class="item-label">Invoice No.</div><div class="item-value">: ${paymentId?.substring(0,10).toUpperCase() || 'INV-001'}</div></div>
-                <div class="item-row"><div class="item-label">Circuit Id</div><div class="item-value">: ATPL_${customer?.activlineUserId || 'N/A'}</div></div>
-                <div class="item-row"><div class="item-label">Username</div><div class="item-value">: ${customer?.userName || 'N/A'}</div></div>
-                <div class="item-row"><div class="item-label">Due Date</div><div class="item-value">: ${dueDate}</div></div>
-                <div class="item-row"><div class="item-label">Billing Period</div><div class="item-value">: ${formattedDate} to -</div></div>
+              <div class="w-[55%]">
+                <div class="item-row"><div class="item-label w-[70px]">Invoice No.</div><div class="item-value">: ${paymentId?.substring(0,10).toUpperCase() || 'INV-001'}</div></div>
+                <div class="item-row"><div class="item-label w-[70px]">Circuit Id</div><div class="item-value">: ATPL_${customer?.activlineUserId || 'N/A'}</div></div>
+                <div class="item-row"><div class="item-label w-[70px]">Username</div><div class="item-value">: ${customer?.userName || 'N/A'}</div></div>
+                <div class="item-row"><div class="item-label w-[70px]">Due Date</div><div class="item-value">: ${formattedDate}</div></div>
+                <div class="item-row"><div class="item-label w-[70px]">Billing Period</div><div class="item-value whitespace-nowrap">: ${formattedDate}  -  ${planExpiry}</div></div>
               </div>
-              <div class="w-1/2">
-                <div class="item-row"><div class="item-label">Dated</div><div class="item-value">: ${formattedDate}</div></div>
-                <div class="item-row"><div class="item-label">Billing Cycle</div><div class="item-value">: Recurring</div></div>
-                <div class="item-row"><div class="item-label">Account Manager</div><div class="item-value">: </div></div>
-                <div class="item-row"><div class="item-label">Order Date</div><div class="item-value">: ${date ? new Date(date).toISOString().replace('T',' ').substring(0,19) : '-'}</div></div>
+              <div class="w-[45%]">
+                <div class="item-row"><div class="item-label w-[75px]">Dated</div><div class="item-value">: ${formattedDate}</div></div>
+                <div class="item-row"><div class="item-label w-[75px]">Billing Cycle</div><div class="item-value">: Recurring</div></div>
+                <div class="item-row"><div class="item-label w-[75px]">Account Manager</div><div class="item-value">: N/A </div></div>
+                <div class="item-row"><div class="item-label w-[75px]">Order Date</div><div class="item-value">: ${formattedDate}</div></div>
               </div>
+             
             </div>
           </div>
         </div>
@@ -200,11 +226,11 @@ export const generateInvoiceHTML = (data) => {
           <div class="table-border w-[48%]">
             <div class="header-pink">Installation Address</div>
             <div class="p-2">
-              <div class="item-row"><div class="item-label">Address</div><div class="item-value leading-tight">: ${customer?.address || 'Bangalore, Karnataka, India,'}</div></div>
-              <div class="item-row mt-1"><div class="item-label">GSTIN</div><div class="item-value">: </div></div>
-              <div class="item-row"><div class="item-label">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
-              <div class="item-row"><div class="item-label">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
-              <div class="item-row"><div class="item-label">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Address</div><div class="item-value leading-tight">: ${customer?.address || 'Bangalore, Karnataka, India,'}</div></div>
+              <div class="item-row mt-1"><div class="item-label w-[60px]">GSTIN</div><div class="item-value">: </div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
             </div>
           </div>
 
@@ -213,16 +239,16 @@ export const generateInvoiceHTML = (data) => {
             <div class="header-dark">Billing Address</div>
             <div class="p-2">
               <div class="flex">
-                <div class="w-[65%]"><div class="item-row"><div class="item-label">State Name</div><div class="item-value">: </div></div></div>
-                <div class="w-[35%]"><div class="item-row"><div class="item-label">Code</div><div class="item-value">: </div></div></div>
+                <div class="w-[60%]"><div class="item-row"><div class="item-label w-[60px]">State Name</div><div class="item-value">: </div></div></div>
+                <div class="w-[40%]"><div class="item-row"><div class="item-label w-[35px]">Code</div><div class="item-value">: </div></div></div>
               </div>
               <div class="flex">
-                <div class="w-[65%]"><div class="item-row"><div class="item-label">GSTIN</div><div class="item-value">: </div></div></div>
-                <div class="w-[35%]"><div class="item-row"><div class="item-label">LUT No</div><div class="item-value">: </div></div></div>
+                <div class="w-[60%]"><div class="item-row"><div class="item-label w-[60px]">GSTIN</div><div class="item-value">: </div></div></div>
+                <div class="w-[40%]"><div class="item-row"><div class="item-label w-[35px]">LUT No</div><div class="item-value">: </div></div></div>
               </div>
-              <div class="item-row"><div class="item-label">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
-              <div class="item-row"><div class="item-label">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
-              <div class="item-row"><div class="item-label">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Bill Name</div><div class="item-value">: ${customer?.name || customer?.userName || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Contact No</div><div class="item-value">: ${customer?.phoneNumber || '-'}</div></div>
+              <div class="item-row"><div class="item-label w-[60px]">Mail</div><div class="item-value" style="word-break: break-all;">: ${customer?.email || '-'}</div></div>
             </div>
           </div>
         </div>
@@ -310,12 +336,10 @@ export const generateInvoiceHTML = (data) => {
               </div>
               
               <!-- Right Side: QR Code -->
-              <div class="w-[40%] flex flex-col items-center justify-center">
-                <div class="font-bold text-[8px] text-center leading-tight mb-2">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
-                <div class="bg-white p-1 rounded-sm shadow-sm flex items-center justify-center border border-blue-200">
-                  <img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR" class="w-[60px] h-[60px] object-contain opacity-40" />
-                </div>
-                <div class="text-[8px] text-black mt-2 text-center">Pay via number also</div>
+              <div class="w-[45%] flex flex-col items-center justify-between">
+                <div class="font-bold text-[9px] text-center leading-tight text-black mb-1">ACTIVLINE FIBERNET<br/>PRIVATE LIMITED</div>
+                ${qrHtml}
+                <div class="text-[9px] text-black mt-1 text-center">Pay via number also</div>
               </div>
             </div>
           </div>
@@ -375,7 +399,7 @@ export const generateInvoiceHTML = (data) => {
         </div>
 
         <!-- Footer -->
-        <div class="mt-2 text-[9px] flex justify-between font-bold text-[#E91E63]">
+        <div class="mt-2 text-[9px] h-[100px] flex justify-between font-bold text-[#E91E63]">
           <div>Payment Terms</div>
           <div>Thanks for choosing ACTIVLINE FIBERNET PRIVATE LIMITED</div>
         </div>

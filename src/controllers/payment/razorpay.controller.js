@@ -1588,10 +1588,11 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     };
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
-
+console.log(paymentData,paymentData?.plan?.details)
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
+      planEndDate:paymentData?.planEndDate,
       planName: paymentData.planName,
       amount: paymentData.amount,
       customer: paymentData.customer,
@@ -1611,6 +1612,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     const pdfUint8Array = await page.pdf({
       width: '595px',
       height: '986px',
+    
       printBackground: true,
       margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
       pageRanges: '1'
