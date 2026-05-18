@@ -2,6 +2,7 @@
 
 import * as ChatRoomRepo from "../../repositories/chat/chatRoom.repository.js";
 import * as ChatMsgRepo from "../../repositories/chat/chatMessage.repository.js";
+import { closeRoom } from "../../repositories/chat/chatRoom.repository.js";
 import ChatMessage from "../../models/chat/chatMessage.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import { createActivityLog } from "../ActivityLog/activityLog.service.js";
@@ -157,77 +158,79 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     }
   }
 
-  // CLOSE => delete room + full chat history + room-linked notifications
+  // ─── SOFT CLOSE ────────────────────────────────────────────────────────────
+  // Room + messages are KEPT in DB. A daily cron job deletes them after 90 days.
   if (newStatus === "CLOSED") {
+    // 1️⃣ Activity log (recorded before any mutation)
     await createActivityLog({
       req,
       action: "UPDATE",
       module: "TICKET",
       description: `Ticket status changed from ${currentStatus} to CLOSED`,
       targetId: roomId,
-      metadata: {
-        from: currentStatus,
-        to: "CLOSED",
-      },
+      metadata: { from: currentStatus, to: "CLOSED" },
     });
 
-    // ✅ Notify customer about status change (CLOSED)
-    try {
-      await notifyCustomer({
-        customerId: room.customer._id,
-        type: "TICKET",
-        data: { roomId, ticketId: roomId, status: "CLOSED" },
-        title: "Ticket Closed",
-        message: `Your support ticket has been closed (Ticket ID: ${roomId})`,
-      });
-    } catch (err) {
-      console.error("Customer ticket notification failed:", err?.message);
-    }
+    // 2️⃣ Soft-close: update status + stamp closedAt (used by cron for 90-day cleanup)
+    const closedRoom = await closeRoom(roomId);
 
+    // 3️⃣ Post a visible system message inside the chat
+    const senderModel =
+      req.user.role === "FRANCHISE_ADMIN" ? "FranchiseAdmin" : "Admin";
+
+    await ChatMsgRepo.saveMessage({
+      roomId,
+      senderId:     req.user._id,
+      senderModel,
+      senderRole:   req.user.role,
+      message:      `This ticket has been closed. Chat history will be retained for 90 days.`,
+      messageType:  "TEXT",
+      statusAtThatTime: "CLOSED",
+    });
+
+    // 4️⃣ Clean up OLD room-linked notifications (same as original design)
     await Promise.all([
-      ChatMessage.deleteMany({ roomId }),
-      ChatRoom.deleteOne({ _id: roomId }),
       CustomerNotification.deleteMany({ "data.roomId": roomId }),
       Notification.deleteMany({ "data.roomId": roomId }),
     ]);
 
+    // 5️⃣ Notify customer about closure
+    try {
+      await notifyCustomer({
+        customerId: room.customer._id,
+        type:       "TICKET",
+        data:       { roomId, ticketId: roomId, status: "CLOSED" },
+        title:      "Ticket Closed",
+        message:    `Your support ticket has been closed (Ticket ID: ${roomId}). History available for 90 days.`,
+      });
+    } catch (err) {
+      console.error("Customer closed-ticket notification failed:", err?.message);
+    }
+
+    // 6️⃣ Notify franchise admins + system admins
     try {
       const accountId = room.customer?.accountId || null;
       if (accountId) {
         await notifyFranchiseAdmins({
           accountId,
-          title: "Ticket Closed",
+          title:   "Ticket Closed",
           message: `Ticket ${roomId} closed`,
-          data: {
-            ticketId: roomId,
-            status: "CLOSED",
-            customerId: room.customer?._id?.toString() || null,
-            type: "TICKET_STATUS",
-          },
+          data:    { ticketId: roomId, status: "CLOSED", customerId: room.customer?._id?.toString() || null, type: "TICKET_CLOSED" },
         });
       }
-
       await notifyAdmins({
-        title: "Ticket Closed",
+        title:   "Ticket Closed",
         message: `Ticket ${roomId} closed`,
-        data: {
-          ticketId: roomId,
-          status: "CLOSED",
-          customerId: room.customer?._id?.toString() || null,
-          accountId,
-          type: "TICKET_CLOSED",
-        },
+        data:    { ticketId: roomId, status: "CLOSED", customerId: room.customer?._id?.toString() || null, accountId, type: "TICKET_CLOSED" },
       });
     } catch (err) {
-      console.error("Ticket notification failed:", err?.message);
+      console.error("Ticket closed notification failed:", err?.message);
     }
 
-    return {
-      _id: roomId,
-      status: "CLOSED",
-      deleted: true,
-    };
+    // Return the real updated room object (deleted: false — room still exists in DB)
+    return closedRoom;
   }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const updatedRoom = await ChatRoomRepo.updateStatus(roomId, newStatus);
 

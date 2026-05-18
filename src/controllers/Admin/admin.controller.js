@@ -7,7 +7,6 @@ export const getAllStaff = async (req, res) => {
 };
 export const getAdminStaff = asyncHandler(async (_req, res) => {
   const staff = await AdminService.getAdminStaffList();
-
   res.json(
     ApiResponse.success(staff, "Admin staff fetched")
   );

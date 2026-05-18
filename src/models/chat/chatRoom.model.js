@@ -38,24 +38,32 @@ lastMessage: {
 },
 
 lastMessageAt: {
-  type: Date,
-  default: null,
-},
+    type: Date,
+    default: null,
+  },
+
+  // Set when status transitions to CLOSED.
+  // Used by the daily cleanup job to delete rooms older than 90 days.
+  closedAt: {
+    type: Date,
+    default: null,
+    index: true,   // sparse index → fast range query in cron
+  },
 
   },
   { timestamps: true }
 );
 
-// 🗑️ CASCADE DELETE: When a room is deleted, delete all its messages & notifications
+// 🗑️ CASCADE DELETE SAFETY-NET
+// This hook fires ONLY when ChatRoom.deleteOne() / deleteMany() is called directly
+// (e.g. by the 90-day cleanup cron job).
+// It does NOT fire during a normal CLOSED status update — the room is soft-closed instead.
 chatRoomSchema.pre("deleteOne", { document: true, query: true }, async function () {
   try {
     const filter = this.getFilter ? this.getFilter() : null;
     const roomId = filter ? filter._id : this._id;
-
     if (roomId) {
-      // Delete all messages associated with this room
       await mongoose.model("ChatMessage").deleteMany({ roomId });
-      // Note: Notifications are also handled in the service, but this is a good backup
     }
   } catch (error) {
     console.error("Cascade delete error:", error);

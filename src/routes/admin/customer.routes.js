@@ -5,6 +5,7 @@ import {
   getCurrentPlanPaymentHistoryByCustomerUserName,
 } from "../../controllers/payment/razorpay.controller.js";
 import { getCustomerTickets } from "../../controllers/Admin/customer.ticket.controller.js";
+import { downloadAdminCustomerDetailsPdf } from "../../controllers/Admin/customerDetailsPdf.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 
@@ -36,6 +37,13 @@ router.get(
   verifyJWT,
   allowRoles("ADMIN"),
   getCustomerTickets
+);
+
+router.get(
+  "/customers/:customerId/download-pdf",
+  verifyJWT,
+  allowRoles("ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+  downloadAdminCustomerDetailsPdf
 );
 
 export default router;

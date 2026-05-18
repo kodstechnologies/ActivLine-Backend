@@ -11,6 +11,14 @@ import { canUserSendMessage } from "../services/chat/chat.service.js";
 let io;
 let isInitialized = false;
 
+/* ===============================
+   🗂️ CONNECTED USERS REGISTRY
+   Tracks online sockets by userId so we can
+   target ADMIN / FRANCHISE_ADMIN for customer-care alerts.
+   Structure: Map<userId_string, Set<socketId_string>>
+   =============================== */
+const connectedUsers = new Map();
+
 export const initSocket = (server) => {
   if (io) {
     // Prevent duplicate Socket.IO instances in the same process
@@ -99,6 +107,11 @@ io = new Server(server, {
       "| ROLE:",
       socket.user.role
     );
+
+    /* -------- REGISTER IN CONNECTED USERS MAP -------- */
+    const uid = String(socket.user._id);
+    if (!connectedUsers.has(uid)) connectedUsers.set(uid, new Set());
+    connectedUsers.get(uid).add(socket.id);
 
     /* -------- JOIN ROOM -------- */
     socket.on("join-room", (roomId) => {
@@ -233,7 +246,91 @@ socket.on("send-message", async ({ roomId, message = "", attachments = [] }) => 
 
 
 
+    /* ===============================
+       📞 CALL CUSTOMER CARE
+       Emitted by: CUSTOMER (or any authenticated socket)
+       - Outside 9AM–9PM  → emits "no_customer_care" back to caller only
+       - Inside  9AM–9PM  → emits "customer_care_request" to every
+         connected ADMIN, SUPER_ADMIN, and FRANCHISE_ADMIN socket
+       Timezone: IST (Asia/Kolkata) — adjust CUSTOMER_CARE_TZ env var if needed
+       =============================== */
+    socket.on("call_customer_care", (data = {}) => {
+      try {
+        /* ---- 1. Determine current hour in the configured timezone ---- */
+        const tz = process.env.CUSTOMER_CARE_TZ || "Asia/Kolkata";
+        const nowInTZ = new Date().toLocaleString("en-US", { timeZone: tz });
+        const currentHour = new Date(nowInTZ).getHours(); // 0–23
+
+        const OPEN_HOUR  = 9;   // 9:00 AM  (inclusive)
+        const CLOSE_HOUR = 21;  // 9:00 PM  (exclusive)
+
+        /* ---- 2. Outside business hours → reject ---- */
+        if (currentHour < OPEN_HOUR || currentHour >= CLOSE_HOUR) {
+          console.log(
+            `📞 call_customer_care: outside hours (${currentHour}:xx ${tz}) — caller: ${socket.id}`
+          );
+          socket.emit("no_customer_care", {
+            success: false,
+            message: "Customer care is available between 9 AM and 9 PM. Please try again during business hours.",
+            currentHour,
+            timezone: tz,
+          });
+          return;
+        }
+
+        /* ---- 3. Within hours → build notification payload ---- */
+        const ADMIN_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"]);
+
+        const payload = {
+          success: true,
+          callerId:   socket.user._id,
+          callerRole: socket.user.role,
+          callerEmail: socket.user.email,
+          message: "A customer is requesting customer care support.",
+          timestamp: new Date().toISOString(),
+          ...(data && typeof data === "object" ? { meta: data } : {}),
+        };
+
+        /* ---- 4. Emit to every live ADMIN / FRANCHISE_ADMIN socket ---- */
+        let notified = 0;
+        io.sockets.sockets.forEach((targetSocket) => {
+          if (
+            targetSocket.id !== socket.id &&          // not the caller themselves
+            ADMIN_ROLES.has(targetSocket.user?.role)  // only admin-side roles
+          ) {
+            targetSocket.emit("customer_care_request", payload);
+            notified++;
+          }
+        });
+
+        console.log(
+          `📞 call_customer_care: notified ${notified} admin/franchise socket(s) — caller: ${socket.id} [${socket.user.role}]`
+        );
+
+        /* ---- 5. Acknowledge the caller that the request was dispatched ---- */
+        socket.emit("customer_care_request_sent", {
+          success: true,
+          message: "Your request has been sent to our support team. Someone will be with you shortly.",
+          notifiedCount: notified,
+          timestamp: payload.timestamp,
+        });
+
+      } catch (err) {
+        console.error("❌ call_customer_care error:", err);
+        socket.emit("no_customer_care", {
+          success: false,
+          message: "Something went wrong while connecting to customer care. Please try again.",
+        });
+      }
+    });
+
     socket.on("disconnect", () => {
+      /* ---- Clean up connectedUsers registry ---- */
+      const uid = String(socket.user._id);
+      if (connectedUsers.has(uid)) {
+        connectedUsers.get(uid).delete(socket.id);
+        if (connectedUsers.get(uid).size === 0) connectedUsers.delete(uid);
+      }
       console.log("🔴 Socket disconnected:", socket.id);
     });
   });
