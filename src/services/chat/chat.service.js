@@ -2,7 +2,6 @@
 
 import * as ChatRoomRepo from "../../repositories/chat/chatRoom.repository.js";
 import * as ChatMsgRepo from "../../repositories/chat/chatMessage.repository.js";
-import { closeRoom } from "../../repositories/chat/chatRoom.repository.js";
 import ChatMessage from "../../models/chat/chatMessage.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import { createActivityLog } from "../ActivityLog/activityLog.service.js";
@@ -158,8 +157,8 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     }
   }
 
-  // ─── SOFT CLOSE ────────────────────────────────────────────────────────────
-  // Room + messages are KEPT in DB. A daily cron job deletes them after 90 days.
+  // ─── CLOSE ──────────────────────────────────────────────────────────────────
+  // Room + messages are kept in DB permanently.
   if (newStatus === "CLOSED") {
     // 1️⃣ Activity log (recorded before any mutation)
     await createActivityLog({
@@ -171,8 +170,8 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       metadata: { from: currentStatus, to: "CLOSED" },
     });
 
-    // 2️⃣ Soft-close: update status + stamp closedAt (used by cron for 90-day cleanup)
-    const closedRoom = await closeRoom(roomId);
+    // 2️⃣ Update status to CLOSED
+    const closedRoom = await ChatRoomRepo.updateStatus(roomId, "CLOSED");
 
     // 3️⃣ Post a visible system message inside the chat
     const senderModel =
@@ -183,7 +182,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       senderId:     req.user._id,
       senderModel,
       senderRole:   req.user.role,
-      message:      `This ticket has been closed. Chat history will be retained for 90 days.`,
+      message:      `This ticket has been closed.`,
       messageType:  "TEXT",
       statusAtThatTime: "CLOSED",
     });
@@ -201,7 +200,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
         type:       "TICKET",
         data:       { roomId, ticketId: roomId, status: "CLOSED" },
         title:      "Ticket Closed",
-        message:    `Your support ticket has been closed (Ticket ID: ${roomId}). History available for 90 days.`,
+        message:    `Your support ticket has been closed (Ticket ID: ${roomId}).`,
       });
     } catch (err) {
       console.error("Customer closed-ticket notification failed:", err?.message);
@@ -227,7 +226,6 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       console.error("Ticket closed notification failed:", err?.message);
     }
 
-    // Return the real updated room object (deleted: false — room still exists in DB)
     return closedRoom;
   }
   // ─────────────────────────────────────────────────────────────────────────────

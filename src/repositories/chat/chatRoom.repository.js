@@ -43,19 +43,3 @@ export const findRoomsByCustomer = (customerId) =>
     .populate("assignedStaff", "name email")
     .sort({ updatedAt: -1 });
 
-// ─── CLOSE (soft) ──────────────────────────────────────────────────────────
-// Only used by the CLOSED status transition. Sets closedAt for the cron job.
-export const closeRoom = (roomId) =>
-  ChatRoom.findByIdAndUpdate(
-    roomId,
-    { status: "CLOSED", closedAt: new Date() },
-    { new: true }
-  ).populate("customer assignedStaff");
-
-// ─── CRON QUERY ────────────────────────────────────────────────────────────
-// Returns minimal projection — only _id needed for batch deletion.
-export const findExpiredClosedRooms = (cutoffDate) =>
-  ChatRoom.find(
-    { status: "CLOSED", closedAt: { $lte: cutoffDate } },
-    { _id: 1 }          // lean projection — no population needed
-  ).lean();

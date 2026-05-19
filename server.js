@@ -7,7 +7,6 @@ import app from './app.js';
 import Admin from './src/models/auth/auth.model.js';
 import Customer from './src/models/Customer/user.model.js';
 import { initSocket } from './src/socket/index.js';
-import { startCleanupJob } from './src/jobs/cleanupClosedTickets.job.js';
 
 const startServer = async () => {
     try {
@@ -31,7 +30,6 @@ const startServer = async () => {
         // });
 
  initSocket(server);
-  startCleanupJob(); // 🗑️ Daily 02:00 AM IST — deletes CLOSED tickets older than 90 days
 
 
         const shutdown = (signal) => {

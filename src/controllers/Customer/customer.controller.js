@@ -18,8 +18,11 @@ import { createActivityLog } from "../../services/ActivityLog/activityLog.servic
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 import { notifyAdmins } from "../../services/Notification/admin.notification.service.js";
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
+import { updateLocationService } from "../../services/Customer/customerprofile.service.js";
+import Location from "../../models/Customer/customerLocation.mode.js";
 
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const normalizeText = (value) => {
   if (value === undefined || value === null) return null;
   const text = String(value).trim();
@@ -100,16 +103,14 @@ export const getCustomers = asyncHandler(async (req, res) => {
     Customer.countDocuments(filter),
   ]);
 
-  return res
-    .status(200)
-    .json(
-      ApiResponse.success(customers, "Customers fetched successfully", {
-        page: pageNum,
-        limit: limitNum,
-        total: totalCustomers,
-        totalPages: Math.ceil(totalCustomers / limitNum),
-      })
-    );
+  return res.status(200).json(
+    ApiResponse.success(customers, "Customers fetched successfully", {
+      page: pageNum,
+      limit: limitNum,
+      total: totalCustomers,
+      totalPages: Math.ceil(totalCustomers / limitNum),
+    }),
+  );
 });
 
 /**
@@ -131,8 +132,14 @@ export const getCustomerById = asyncHandler(async (req, res) => {
   }
 
   // Security check: A franchise admin can only view customers from their own franchise.
-  if (req.user?.role === "FRANCHISE_ADMIN" && customer.accountId !== req.user.accountId) {
-    throw new ApiError(403, "Access Denied. You can only view customers from your franchise.");
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only view customers from your franchise.",
+    );
   }
 
   // Security check: Admin staff can only view customers assigned to them
@@ -143,13 +150,18 @@ export const getCustomerById = asyncHandler(async (req, res) => {
     });
 
     if (!assigned) {
-      throw new ApiError(403, "Access Denied. You can only view customers assigned to you.");
+      throw new ApiError(
+        403,
+        "Access Denied. You can only view customers assigned to you.",
+      );
     }
   }
 
   return res
     .status(200)
-    .json(ApiResponse.success(customer, "Customer details fetched successfully"));
+    .json(
+      ApiResponse.success(customer, "Customer details fetched successfully"),
+    );
 });
 
 /**
@@ -163,18 +175,24 @@ export const getCustomerCityById = asyncHandler(async (req, res) => {
   const isObjectId = mongoose.Types.ObjectId.isValid(customerId);
   const customer = isObjectId
     ? await Customer.findById(customerId).select(
-        "_id accountId address installationAddress activlineUserId"
+        "_id accountId address installationAddress activlineUserId",
       )
     : await Customer.findOne({ activlineUserId: customerId }).select(
-        "_id accountId address installationAddress activlineUserId"
+        "_id accountId address installationAddress activlineUserId",
       );
 
   if (!customer) {
     throw new ApiError(404, "Customer not found");
   }
 
-  if (req.user?.role === "FRANCHISE_ADMIN" && customer.accountId !== req.user.accountId) {
-    throw new ApiError(403, "Access Denied. You can only view customers from your franchise.");
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only view customers from your franchise.",
+    );
   }
 
   if (req.user?.role === "ADMIN_STAFF") {
@@ -184,20 +202,24 @@ export const getCustomerCityById = asyncHandler(async (req, res) => {
     });
 
     if (!assigned) {
-      throw new ApiError(403, "Access Denied. You can only view customers assigned to you.");
+      throw new ApiError(
+        403,
+        "Access Denied. You can only view customers assigned to you.",
+      );
     }
   }
 
   if (req.user?.role === "CUSTOMER") {
     if (String(customer._id) !== String(req.user._id)) {
-      throw new ApiError(403, "Access Denied. You can only view your own details.");
+      throw new ApiError(
+        403,
+        "Access Denied. You can only view your own details.",
+      );
     }
   }
 
   const city =
-    customer.address?.city ||
-    customer.installationAddress?.city ||
-    null;
+    customer.address?.city || customer.installationAddress?.city || null;
 
   return res.status(200).json(
     ApiResponse.success(
@@ -206,8 +228,8 @@ export const getCustomerCityById = asyncHandler(async (req, res) => {
         activlineUserId: customer.activlineUserId || null,
         city,
       },
-      "Customer city fetched successfully"
-    )
+      "Customer city fetched successfully",
+    ),
   );
 });
 
@@ -225,7 +247,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
   if (error) {
     throw new ApiError(
       400,
-      error.details.map((detail) => detail.message).join(", ")
+      error.details.map((detail) => detail.message).join(", "),
     );
   }
 
@@ -250,12 +272,11 @@ export const createCustomer = asyncHandler(async (req, res) => {
     };
   }
 
-  const response = res.status(201).json(
-    ApiResponse.success(
-      null,
-      "Your account is created in ActivLine"
-    )
-  );
+  const response = res
+    .status(201)
+    .json(
+      ApiResponse.success(customerData, "Your account is created in ActivLine"),
+    );
 
   setImmediate(() => {
     void (async () => {
@@ -269,7 +290,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
             password: result.credentials.password,
             phoneNumber: value.phoneNumber,
             emailId: value.emailId,
-          })
+          }),
         );
       }
 
@@ -288,7 +309,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
             accountId: result.customer?.accountId || null,
             createdByRole: req.user?.role || "CUSTOMER",
           },
-        })
+        }),
       );
 
       tasks.push(
@@ -300,7 +321,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
             customerId: result.customer?._id?.toString() || null,
             activlineUserId: result.customer?.activlineUserId || null,
           },
-        })
+        }),
       );
 
       tasks.push(
@@ -313,22 +334,25 @@ export const createCustomer = asyncHandler(async (req, res) => {
             activlineUserId: result.customer?.activlineUserId || null,
             type: "CUSTOMER_CREATED",
           },
-        })
+        }),
       );
 
       if (req.files && Object.keys(req.files).length > 0) {
         tasks.push(
           finalizeCustomerDocuments(
             result.customer?.activlineUserId || null,
-            req.files
-          )
+            req.files,
+          ),
         );
       }
 
       const results = await Promise.allSettled(tasks);
       results.forEach((taskResult) => {
         if (taskResult.status === "rejected") {
-          console.error("Background task failed:", taskResult.reason?.message || taskResult.reason);
+          console.error(
+            "Background task failed:",
+            taskResult.reason?.message || taskResult.reason,
+          );
         }
       });
     })();
@@ -356,47 +380,63 @@ export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Customer not found");
   }
 
-  if (req.user?.role === "FRANCHISE_ADMIN" && customer.accountId !== req.user.accountId) {
-    throw new ApiError(403, "Access Denied. You can only view customers from your franchise.");
+  if (
+    req.user?.role === "FRANCHISE_ADMIN" &&
+    customer.accountId !== req.user.accountId
+  ) {
+    throw new ApiError(
+      403,
+      "Access Denied. You can only view customers from your franchise.",
+    );
   }
 
-  const paymentPage = parseInt(req.query.paymentPage || req.query.page || 1, 10);
-  const paymentLimit = Math.min(parseInt(req.query.paymentLimit || req.query.limit || 10, 10), 100);
+  const paymentPage = parseInt(
+    req.query.paymentPage || req.query.page || 1,
+    10,
+  );
+  const paymentLimit = Math.min(
+    parseInt(req.query.paymentLimit || req.query.limit || 10, 10),
+    100,
+  );
   const ticketLimit = Math.min(parseInt(req.query.ticketLimit || 10, 10), 100);
 
   const paymentFilters = {
     $or: [
       customer.accountId ? { accountId: String(customer.accountId) } : null,
       customer.userGroupId ? { groupId: String(customer.userGroupId) } : null,
-      customer.activlineUserId ? { profileId: String(customer.activlineUserId) } : null,
+      customer.activlineUserId
+        ? { profileId: String(customer.activlineUserId) }
+        : null,
     ].filter(Boolean),
   };
 
-  const paymentSkip = (Math.max(paymentPage, 1) - 1) * Math.max(paymentLimit, 1);
+  const paymentSkip =
+    (Math.max(paymentPage, 1) - 1) * Math.max(paymentLimit, 1);
 
-  const [payments, paymentTotal, ticketRooms, ticketStatusCounts] = await Promise.all([
-    paymentFilters.$or.length
-      ? PaymentHistory.find(paymentFilters)
-          .sort({ createdAt: -1 })
-          .skip(paymentSkip)
-          .limit(paymentLimit)
-      : Promise.resolve([]),
-    paymentFilters.$or.length
-      ? PaymentHistory.countDocuments(paymentFilters)
-      : Promise.resolve(0),
-    ChatRoom.find({ customer: customer._id })
-      .select(
-        "_id status createdAt updatedAt lastMessage lastMessageAt assignedStaff assignedFranchiseAdmin"
-      )
-      .populate("assignedStaff", "name email")
-      .populate("assignedFranchiseAdmin", "name email accountId role status")
-      .sort({ updatedAt: -1 })
-      .limit(ticketLimit),
-    ChatRoom.aggregate([
-      { $match: { customer: customer._id } },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]),
-  ]);
+  const [payments, paymentTotal, ticketRooms, ticketStatusCounts] =
+    await Promise.all([
+      paymentFilters.$or.length
+        ? PaymentHistory.find(paymentFilters)
+            .sort({ createdAt: -1 })
+            .skip(paymentSkip)
+            .limit(paymentLimit)
+        : Promise.resolve([]),
+      paymentFilters.$or.length
+        ? PaymentHistory.countDocuments(paymentFilters)
+        : Promise.resolve(0),
+      ChatRoom.find({ customer: customer._id })
+        .select(
+          "_id status createdAt updatedAt lastMessage lastMessageAt assignedStaff assignedFranchiseAdmin",
+        )
+        .populate("assignedStaff", "name email")
+        .populate("assignedFranchiseAdmin", "name email accountId role status")
+        .sort({ updatedAt: -1 })
+        .limit(ticketLimit),
+      ChatRoom.aggregate([
+        { $match: { customer: customer._id } },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+    ]);
 
   const ticketSummary = {
     OPEN: 0,
@@ -419,7 +459,8 @@ export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
           page: Math.max(paymentPage, 1),
           limit: Math.max(paymentLimit, 1),
           total: paymentTotal,
-          totalPages: paymentTotal === 0 ? 0 : Math.ceil(paymentTotal / paymentLimit),
+          totalPages:
+            paymentTotal === 0 ? 0 : Math.ceil(paymentTotal / paymentLimit),
           data: payments.map((item) => ({
             paymentId: String(item._id),
             orderId: item.razorpayOrderId || null,
@@ -444,8 +485,8 @@ export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
           data: ticketRooms,
         },
       },
-      "Customer overview fetched successfully"
-    )
+      "Customer overview fetched successfully",
+    ),
   );
 });
 
@@ -473,14 +514,14 @@ export const updateCustomer = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(
       403,
-      "Access Denied. You can only update customers from your franchise."
+      "Access Denied. You can only update customers from your franchise.",
     );
   }
 
   const updatedCustomer = await updateCustomerService(
     activlineUserId,
     req.body || {},
-    req.files || {}
+    req.files || {},
   );
 
   await createActivityLog({
@@ -510,7 +551,9 @@ export const updateCustomer = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
+    .json(
+      ApiResponse.success(updatedCustomer, "Customer updated successfully"),
+    );
 });
 
 /**
@@ -536,14 +579,14 @@ export const updateCustomerByIdForFranchise = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(
       403,
-      "Access Denied. You can only update customers from your franchise."
+      "Access Denied. You can only update customers from your franchise.",
     );
   }
 
   const updatedCustomer = await updateCustomerService(
     existing.activlineUserId,
     req.body || {},
-    req.files || {}
+    req.files || {},
   );
 
   await createActivityLog({
@@ -560,7 +603,9 @@ export const updateCustomerByIdForFranchise = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(ApiResponse.success(updatedCustomer, "Customer updated successfully"));
+    .json(
+      ApiResponse.success(updatedCustomer, "Customer updated successfully"),
+    );
 });
 
 /**
@@ -576,7 +621,7 @@ export const getCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   }
 
   const customer = await Customer.findById(customerId).select(
-    "_id accountId maintenance"
+    "_id accountId maintenance",
   );
 
   if (!customer) {
@@ -589,7 +634,7 @@ export const getCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(
       403,
-      "Access Denied. You can only view customers from your franchise."
+      "Access Denied. You can only view customers from your franchise.",
     );
   }
 
@@ -600,8 +645,8 @@ export const getCustomerMaintenanceDates = asyncHandler(async (req, res) => {
         firstDate: customer.maintenance?.lastDate || null,
         endDate: customer.maintenance?.endDate || null,
       },
-      "Customer maintenance dates fetched successfully"
-    )
+      "Customer maintenance dates fetched successfully",
+    ),
   );
 });
 
@@ -623,7 +668,7 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   }
 
   const customer = await Customer.findById(customerId).select(
-    "_id accountId maintenance"
+    "_id accountId maintenance",
   );
 
   if (!customer) {
@@ -636,7 +681,7 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(
       403,
-      "Access Denied. You can only update customers from your franchise."
+      "Access Denied. You can only update customers from your franchise.",
     );
   }
 
@@ -647,7 +692,7 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   const updatedCustomer = await Customer.findByIdAndUpdate(
     customerId,
     { $set: update },
-    { new: true }
+    { new: true },
   ).select("_id maintenance");
 
   return res.status(200).json(
@@ -657,8 +702,8 @@ export const upsertCustomerMaintenanceDates = asyncHandler(async (req, res) => {
         firstDate: updatedCustomer.maintenance?.lastDate || null,
         endDate: updatedCustomer.maintenance?.endDate || null,
       },
-      "Customer maintenance dates updated successfully"
-    )
+      "Customer maintenance dates updated successfully",
+    ),
   );
 });
 
@@ -675,7 +720,7 @@ export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   }
 
   const customer = await Customer.findById(customerId).select(
-    "_id accountId maintenance"
+    "_id accountId maintenance",
   );
 
   if (!customer) {
@@ -688,14 +733,14 @@ export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(
       403,
-      "Access Denied. You can only update customers from your franchise."
+      "Access Denied. You can only update customers from your franchise.",
     );
   }
 
   const updatedCustomer = await Customer.findByIdAndUpdate(
     customerId,
     { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
-    { new: true }
+    { new: true },
   ).select("_id maintenance");
 
   return res.status(200).json(
@@ -705,8 +750,8 @@ export const deleteCustomerMaintenanceDates = asyncHandler(async (req, res) => {
         firstDate: updatedCustomer.maintenance?.lastDate || null,
         endDate: updatedCustomer.maintenance?.endDate || null,
       },
-      "Customer maintenance dates deleted successfully"
-    )
+      "Customer maintenance dates deleted successfully",
+    ),
   );
 });
 
@@ -733,7 +778,7 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
         }).select("_id accountId maintenance");
       } else if (req.user._id) {
         me = await Customer.findById(req.user._id).select(
-          "_id accountId maintenance"
+          "_id accountId maintenance",
         );
       }
 
@@ -761,8 +806,8 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
             firstDate: me.maintenance?.lastDate || null,
             endDate: me.maintenance?.endDate || null,
           },
-          "Customer maintenance dates fetched successfully"
-        )
+          "Customer maintenance dates fetched successfully",
+        ),
       );
     }
 
@@ -772,12 +817,12 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
     ) {
       throw new ApiError(
         403,
-        "Access Denied. You can only view customers from your franchise."
+        "Access Denied. You can only view customers from your franchise.",
       );
     }
 
     const customers = await Customer.find({ accountId }).select(
-      "_id accountId maintenance"
+      "_id accountId maintenance",
     );
 
     if (!customers.length) {
@@ -793,10 +838,10 @@ export const getCustomerMaintenanceDatesByAccountId = asyncHandler(
           endDate: customer.maintenance?.endDate || null,
         })),
         "Customer maintenance dates fetched successfully",
-        { count: customers.length }
-      )
+        { count: customers.length },
+      ),
     );
-  }
+  },
 );
 
 /**
@@ -828,8 +873,8 @@ export const getMyAccountMaintenanceSummary = asyncHandler(async (req, res) => {
         firstDate: customer?.maintenance?.lastDate || null,
         endDate: customer?.maintenance?.endDate || null,
       },
-      "Account maintenance dates fetched successfully"
-    )
+      "Account maintenance dates fetched successfully",
+    ),
   );
 });
 
@@ -852,9 +897,7 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
     }
 
     if (req.user?.role === "CUSTOMER") {
-      const me = await Customer.findById(req.user._id).select(
-        "_id accountId"
-      );
+      const me = await Customer.findById(req.user._id).select("_id accountId");
 
       if (!me) {
         throw new ApiError(404, "Customer not found");
@@ -870,7 +913,7 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
 
       const updateResult = await Customer.updateMany(
         { accountId },
-        { $set: update }
+        { $set: update },
       );
 
       return res.status(200).json(
@@ -879,15 +922,16 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
             accountId,
             firstDate: lastDate !== undefined ? lastDate : null,
             endDate: endDate !== undefined ? endDate : null,
-            updatedCount: updateResult.modifiedCount || updateResult.nModified || 0,
+            updatedCount:
+              updateResult.modifiedCount || updateResult.nModified || 0,
           },
-          "Customer maintenance dates updated successfully"
-        )
+          "Customer maintenance dates updated successfully",
+        ),
       );
     }
 
     const customers = await Customer.find({ accountId }).select(
-      "_id accountId maintenance"
+      "_id accountId maintenance",
     );
 
     if (!customers.length) {
@@ -900,7 +944,7 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
     ) {
       throw new ApiError(
         403,
-        "Access Denied. You can only update customers from your franchise."
+        "Access Denied. You can only update customers from your franchise.",
       );
     }
 
@@ -910,7 +954,7 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
 
     const updateResult = await Customer.updateMany(
       { accountId },
-      { $set: update }
+      { $set: update },
     );
 
     return res.status(200).json(
@@ -919,12 +963,13 @@ export const upsertCustomerMaintenanceDatesByAccountId = asyncHandler(
           accountId,
           firstDate: lastDate !== undefined ? lastDate : null,
           endDate: endDate !== undefined ? endDate : null,
-          updatedCount: updateResult.modifiedCount || updateResult.nModified || 0,
+          updatedCount:
+            updateResult.modifiedCount || updateResult.nModified || 0,
         },
-        "Customer maintenance dates updated successfully"
-      )
+        "Customer maintenance dates updated successfully",
+      ),
     );
-  }
+  },
 );
 
 /**
@@ -942,7 +987,7 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
 
     if (req.user?.role === "CUSTOMER") {
       const me = await Customer.findById(req.user._id).select(
-        "_id accountId maintenance"
+        "_id accountId maintenance",
       );
 
       if (!me) {
@@ -956,7 +1001,7 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
       const updatedCustomer = await Customer.findByIdAndUpdate(
         me._id,
         { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
-        { new: true }
+        { new: true },
       ).select("_id accountId maintenance");
 
       return res.status(200).json(
@@ -967,13 +1012,13 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
             firstDate: updatedCustomer.maintenance?.lastDate || null,
             endDate: updatedCustomer.maintenance?.endDate || null,
           },
-          "Customer maintenance dates deleted successfully"
-        )
+          "Customer maintenance dates deleted successfully",
+        ),
       );
     }
 
     const customer = await Customer.findOne({ accountId }).select(
-      "_id accountId maintenance"
+      "_id accountId maintenance",
     );
 
     if (!customer) {
@@ -986,14 +1031,14 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
     ) {
       throw new ApiError(
         403,
-        "Access Denied. You can only update customers from your franchise."
+        "Access Denied. You can only update customers from your franchise.",
       );
     }
 
     const updatedCustomer = await Customer.findOneAndUpdate(
       { accountId },
       { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
-      { new: true }
+      { new: true },
     ).select("_id accountId maintenance");
 
     return res.status(200).json(
@@ -1004,10 +1049,10 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
           firstDate: updatedCustomer.maintenance?.lastDate || null,
           endDate: updatedCustomer.maintenance?.endDate || null,
         },
-        "Customer maintenance dates deleted successfully"
-      )
+        "Customer maintenance dates deleted successfully",
+      ),
     );
-  }
+  },
 );
 
 /**
@@ -1042,9 +1087,7 @@ export const updateMyProfileImage = asyncHandler(async (req, res) => {
   }
 
   const file =
-    req.file ||
-    req.files?.profilePicFile?.[0] ||
-    req.files?.profileImage?.[0];
+    req.file || req.files?.profilePicFile?.[0] || req.files?.profileImage?.[0];
 
   if (!file) {
     throw new ApiError(400, "profilePicFile is required");
@@ -1076,5 +1119,27 @@ export const deleteMyProfileImage = asyncHandler(async (req, res) => {
     .json(ApiResponse.success(null, "Profile image deleted successfully"));
 });
 
+// update customer location
 
+export const updateLocation = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { longitude, latitude } = req.body;
+  if (!userId || !latitude || !longitude) {
+    throw new ApiError(401, "all fields are required");
+  }
+  await updateLocationService({ userId, location: { longitude, latitude } });
+  return res
+    .status(200)
+    .json(ApiResponse.success(null, "location update successfully"));
+});
 
+export const getLocation = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  if (!userId) {
+    throw new ApiError(401, "User ID not found in token");
+  }
+  const locationData = Location.findOne({ userId });
+  return res
+    .status(200)
+    .json(ApiResponse.success(locationData, "location update successfully"));
+});
