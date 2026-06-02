@@ -1,13 +1,11 @@
 // src/repositories/chat/chatRoom.repository.js
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 
-
 export const getAll = (filter = {}) =>
   ChatRoom.find(filter)
     .populate("customer", "fullName email mobile userName phoneNumber emailId")
     .populate("assignedStaff", "name email")
     .sort({ updatedAt: -1 });
-
 
 export const createRoom = (data) => ChatRoom.create(data);
 
@@ -21,20 +19,17 @@ export const assignStaff = (roomId, staffId) =>
   ChatRoom.findByIdAndUpdate(
     roomId,
     { assignedStaff: staffId, status: "ASSIGNED" },
-    { new: true }
+    { new: true },
   );
 export const findByAssignedStaff = (staffId) =>
   ChatRoom.find({ assignedStaff: staffId })
     .populate("customer", "fullName email mobile")
     .sort({ updatedAt: -1 });
 
-    
-    export const updateStatus = (roomId, status) =>
-  ChatRoom.findByIdAndUpdate(
-    roomId,
-    { status },
-    { new: true }
-  ).populate("customer assignedStaff");
+export const updateStatus = (roomId, status) =>
+  ChatRoom.findByIdAndUpdate(roomId, { status }, { new: true }).populate(
+    "customer assignedStaff",
+  );
 export const updateRoomLastMessage = (roomId, data) =>
   ChatRoom.findByIdAndUpdate(roomId, data, { new: true });
 

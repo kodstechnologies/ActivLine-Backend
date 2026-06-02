@@ -1,4 +1,5 @@
 import axios from "axios";
+import https from "https";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import { ApiResponse } from "../../utils/ApiReponse.js";
 
@@ -18,7 +19,11 @@ export const validateAndAutoFillPin = asyncHandler(async (req, res) => {
   let data;
   try {
     const response = await axios.get(
-      `https://api.postalpincode.in/pincode/${pin}`
+      `https://api.postalpincode.in/pincode/${pin}`,
+      { 
+        timeout: 5000,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false })
+      }
     );
     data = response.data;
   } catch (error) {
@@ -114,7 +119,11 @@ export const autoFillByIndianPin = asyncHandler(async (req, res) => {
   }
 
   const response = await axios.get(
-    `https://api.postalpincode.in/pincode/${pin}`
+    `https://api.postalpincode.in/pincode/${pin}`,
+    { 
+      timeout: 5000,
+      httpsAgent: new https.Agent({ rejectUnauthorized: false })
+    }
   );
 
   const postOffices = response.data?.[0]?.PostOffice;

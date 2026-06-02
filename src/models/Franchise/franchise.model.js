@@ -27,13 +27,22 @@ const franchiseSchema = new mongoose.Schema(
     dateCreated: {
       type: Date,
     },
+    franchise_availavility: {
+      startTime: {
+        type: String,
+        default: "09:00 AM",
+      },
+      endTime: {
+        type: String,
+        default: "09:00 PM",
+      },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // 🔥 FIX
 const Franchise =
-  mongoose.models.Franchise ||
-  mongoose.model("Franchise", franchiseSchema);
+  mongoose.models.Franchise || mongoose.model("Franchise", franchiseSchema);
 
 export default Franchise;

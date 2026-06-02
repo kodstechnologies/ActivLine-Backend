@@ -4,6 +4,8 @@ import { getActivlineUserDetails ,updateUserInActivline} from "../../services/Cu
 
 import { generateOtp, verifyOtp } from "../../services/Customer/otp.service.js";
 import Customer from "../../models/Customer/customer.model.js";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 export const editUserProfile = asyncHandler(async (req, res) => {
   const { userId, email, phoneNumber, password } = req.body;
@@ -129,7 +131,29 @@ export const verifyOtpAndUpdate = asyncHandler(async (req, res) => {
   if (customer) {
     if (updates.email) customer.emailId = updates.email;
     if (updates.phoneNumber) customer.phoneNumber = updates.phoneNumber;
-    if (updates.password) customer.password = updates.password; // pre-save hook will hash this
+    if (updates.password) {
+      customer.password = updates.password; // pre-save hook will hash this
+
+      // 📧 Send Password Change Alert SMS (DLT compliant)
+      if (customer.phoneNumber) {
+        try {
+          const name = customer.firstName || customer.userName || "Customer";
+          const { ID, MESSAGE } = SMS_TEMPLATE_ID.USER_CHANGE_PASSWORD_ALERT(
+            name,
+            updates.password
+          );
+
+          await sendMessage({
+            mobile: customer.phoneNumber,
+            message: MESSAGE,
+            template_id: ID,
+          });
+          console.log(`[SMS] Password edit profile alert sent to ${customer.phoneNumber}`);
+        } catch (smsErr) {
+          console.error("[SMS] Failed to send password edit profile alert:", smsErr.message);
+        }
+      }
+    }
     await customer.save();
   }
 

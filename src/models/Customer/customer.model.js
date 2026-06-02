@@ -65,7 +65,6 @@
 //   profilePicFile: String,
 // },
 
-
 //     // 🔹 Audit
 //     rawPayload: {
 //       type: Object,
@@ -78,7 +77,7 @@
 //     referral: {
 //   code: {
 //     type: String,
-  
+
 //     index: true
 //   },
 //   referredCount: {
@@ -96,7 +95,6 @@
 //   mongoose.model("Customer", customerSchema);
 
 // export default Customer;
-
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
@@ -237,32 +235,48 @@ const customerSchema = new mongoose.Schema(
     /* =================================
        🔹 REFERRAL
     ================================= */
- referral: {
-  code: {
-    type: String,
-    index: true,
-    unique: true,   // optional but recommended
-    sparse: true,   // important if using unique
-    trim: true,
-  },
-  referredCount: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
-  getRewards: {
-    type: String,
-    trim: true,
-    default: "1 Month FREE",
-  },
-  giveRewards: {
-    type: String,
-    trim: true,
-    default: "$500 off",
-  },
-},
-
-
+    referral: {
+      code: {
+        type: String,
+        index: true,
+        unique: true, // optional but recommended
+        sparse: true, // important if using unique
+        trim: true,
+      },
+      referredCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      getRewards: {
+        type: String,
+        trim: true,
+        default: "1 Month FREE",
+      },
+      giveRewards: {
+        type: String,
+        trim: true,
+        default: "$500 off",
+      },
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Customer",
+      index: true,
+    },
+    referredByCode: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    referredAt: {
+      type: Date,
+      index: true,
+    },
+    referralCompleted: {
+      type: Boolean,
+      default: false,
+    },
 
     /* =================================
        🔹 AUDIT
@@ -278,8 +292,12 @@ const customerSchema = new mongoose.Schema(
       code: String,
       expiresAt: Date,
     },
+    pendingAgentNotification: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // 🔐 Hash password before saving
@@ -290,53 +308,50 @@ customerSchema.pre("save", async function () {
   }
 
   // 🔹 2. Generate Referral Code (Only if new & has firstName)
-  if (this.isNew && this.firstName) {
-    const firstName = this.firstName
-      .toUpperCase()
-      .replace(/\s+/g, "");
+  // if (this.isNew && this.firstName) {
+  //   const firstName = this.firstName
+  //     .toUpperCase()
+  //     .replace(/\s+/g, "");
 
-    const lastCustomer = await mongoose.models.Customer.findOne({
-      "referral.code": new RegExp(`^${firstName}`)
-    }).sort({ "referral.code": -1 });
+  //   const lastCustomer = await mongoose.models.Customer.findOne({
+  //     "referral.code": new RegExp(`^${firstName}`)
+  //   }).sort({ "referral.code": -1 });
 
-    let nextNumber = 1;
+  //   let nextNumber = 1;
 
-    if (lastCustomer?.referral?.code) {
-      const lastCode = String(lastCustomer.referral.code);
-      const match = lastCode.match(/(\d+)$/);
-      const lastNumber = match ? parseInt(match[1], 10) : 0;
-      nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-    }
+  //   if (lastCustomer?.referral?.code) {
+  //     const lastCode = String(lastCustomer.referral.code);
+  //     const match = lastCode.match(/(\d+)$/);
+  //     const lastNumber = match ? parseInt(match[1], 10) : 0;
+  //     nextNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
+  //   }
 
-    let paddedNumber = String(nextNumber).padStart(4, "0");
-    let candidate = `${firstName}${paddedNumber}`;
-    let attempts = 0;
+  //   let paddedNumber = String(nextNumber).padStart(4, "0");
+  //   let candidate = `${firstName}${paddedNumber}`;
+  //   let attempts = 0;
 
-    while (
-      attempts < 20 &&
-      (await mongoose.models.Customer.exists({ "referral.code": candidate }))
-    ) {
-      nextNumber += 1;
-      paddedNumber = String(nextNumber).padStart(4, "0");
-      candidate = `${firstName}${paddedNumber}`;
-      attempts += 1;
-    }
+  //   while (
+  //     attempts < 20 &&
+  //     (await mongoose.models.Customer.exists({ "referral.code": candidate }))
+  //   ) {
+  //     nextNumber += 1;
+  //     paddedNumber = String(nextNumber).padStart(4, "0");
+  //     candidate = `${firstName}${paddedNumber}`;
+  //     attempts += 1;
+  //   }
 
-    if (attempts >= 20) {
-      // Fallback: add a random suffix to avoid unique conflicts
-      const randomSuffix = String(crypto.randomInt(0, 10000)).padStart(4, "0");
-      candidate = `${firstName}${randomSuffix}`;
-    }
+  //   if (attempts >= 20) {
+  //     // Fallback: add a random suffix to avoid unique conflicts
+  //     const randomSuffix = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+  //     candidate = `${firstName}${randomSuffix}`;
+  //   }
 
-    this.referral = {
-      code: candidate,
-      referredCount: 0
-    };
-  }
-
+  //   this.referral = {
+  //     code: candidate,
+  //     referredCount: 0
+  //   };
+  // }
 });
-
-
 
 // 🔍 Compare password method
 customerSchema.methods.comparePassword = async function (enteredPassword) {
@@ -345,7 +360,6 @@ customerSchema.methods.comparePassword = async function (enteredPassword) {
 };
 
 const Customer =
-  mongoose.models.Customer ||
-  mongoose.model("Customer", customerSchema);
+  mongoose.models.Customer || mongoose.model("Customer", customerSchema);
 
 export default Customer;

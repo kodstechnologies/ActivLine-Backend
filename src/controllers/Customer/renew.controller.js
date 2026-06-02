@@ -4,6 +4,11 @@ import { renewUserPlan } from "../../services/Customer/renew.service.js";
 import Customer from "../../models/Customer/customer.model.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 import { notifyCustomer } from "../../services/Notification/customer.notification.service.js";
+import { getProfileDetails, getUserByUsername } from "../../external/activline/activline.profile.api.js";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { fetchProfilesWithDetailsByFranchise } from "../../services/franchise/profile.service.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
+import { resetUsageHistory } from "../../services/Customer/dailyDataUsage.service.js";
 
 // export const renew = asyncHandler(async (req, res) => {
 //   const payload = req.body || {};
@@ -41,7 +46,6 @@ import { notifyCustomer } from "../../services/Notification/customer.notificatio
 //   });
 // });
 
-
 export const renew = asyncHandler(async (req, res) => {
   const payload = req.body || {};
 
@@ -52,7 +56,7 @@ export const renew = asyncHandler(async (req, res) => {
   if (!userId || !renewDefaultSettings || !isRenewPresentDate) {
     throw new ApiError(
       400,
-      "userId, renewDefaultSettings, and isRenewPresentDate are required"
+      "userId, renewDefaultSettings, and isRenewPresentDate are required",
     );
   }
 
@@ -64,8 +68,8 @@ export const renew = asyncHandler(async (req, res) => {
     typeof errorCode === "number"
       ? errorCode
       : status === "success"
-      ? 200
-      : 500;
+        ? 200
+        : 500;
 
   const success = status === "success" || statusCode < 400;
 
@@ -73,7 +77,13 @@ export const renew = asyncHandler(async (req, res) => {
     try {
       const customer = await Customer.findOne({
         activlineUserId: String(userId),
-      }).select("_id userName accountId activlineUserId");
+      }).select("_id userName accountId activlineUserId phoneNumber");
+
+      if (customer?._id) {
+        await resetUsageHistory(customer._id).catch((resetErr) => {
+          console.error("Failed to reset customer data usage history on renew:", resetErr.message);
+        });
+      }
 
       if (customer?.accountId) {
         await notifyFranchiseAdmins({
@@ -99,8 +109,102 @@ export const renew = asyncHandler(async (req, res) => {
           },
         });
       }
+
+      if (customer?.phoneNumber) {
+        try {
+          let planAmount = 0;
+
+          if (customer?.accountId) {
+            try {
+              const profileResult = await fetchProfilesWithDetailsByFranchise(
+                customer.accountId,
+                {
+                  profileId: String(userId),
+                },
+              );
+              
+              const profilesList =
+                profileResult?.items ||
+                profileResult?.profiles ||
+                profileResult?.data?.profiles ||
+                [];
+
+              const matchedProfile = profilesList.find(
+                (p) => String(p?.Profile?.id || p?.id || "") === String(userId)
+              );
+
+              const details = matchedProfile?.details || profileResult?.item?.details || {};
+              const billingRows = details?.["billing Details"] || [];
+              const totalPriceRow = billingRows.find(
+                (row) =>
+                  String(row?.property || "")
+                    .toLowerCase()
+                    .trim() === "total price",
+              );
+              if (totalPriceRow?.value) {
+                planAmount = Number(totalPriceRow.value);
+              }
+            } catch (fetchErr) {
+              console.error(
+                "Failed to fetch plan amount from profile details:",
+                fetchErr.message,
+              );
+            }
+          }
+
+          if (!planAmount) {
+            planAmount = 799; // Fallback default
+          }
+
+          const { ID, MESSAGE } = SMS_TEMPLATE_ID.RENEWAL_NEW(
+            customer.userName || "Customer",
+            "Activline Internet",
+            new Date().toLocaleDateString(),
+            "Activline Team"
+          );
+          await sendMessage({
+            mobile: customer.phoneNumber,
+            message: MESSAGE,
+            template_id: ID,
+          });
+          console.log(
+            `[SMS] Plan buy/renew notification sent to ${customer.phoneNumber} with amount ${planAmount}`,
+          );
+        } catch (smsErr) {
+          console.error(
+            `[SMS] Failed to send buy/renew notification:`,
+            smsErr.message,
+          );
+        }
+      }
     } catch (err) {
       console.error("Franchise renew notification failed:", err?.message);
+    }
+
+    try {
+      const customer = await Customer.findOne({
+        activlineUserId: String(userId),
+      }).select("userName");
+
+      if (customer?.userName) {
+        const userRes = await getUserByUsername(customer.userName);
+        const inner = userRes?.[0] || userRes || [];
+        const userObj = inner.find((item) => item && item.User);
+        const expirationTime = userObj?.User?.expirationTime;
+
+        if (expirationTime) {
+          const expirationDate = expirationTime.split(" ")[0]; // Get YYYY-MM-DD
+          await Customer.updateOne(
+            { activlineUserId: String(userId) },
+            { $set: { expirationDate } },
+          );
+        }
+      }
+    } catch (err) {
+      console.error(
+        "Failed to update expiration date locally after renew:",
+        err?.message,
+      );
     }
   }
 

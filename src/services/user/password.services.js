@@ -3,6 +3,8 @@ import { ApiError } from "../../utils/ApiError.js";
 import { generateOTP } from "../../utils/otp.util.js";
 import { generateResetToken } from "../../utils/jwt.js";
 import crypto from "crypto";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 class PasswordService {
 
@@ -88,6 +90,26 @@ class PasswordService {
     user.password = newPassword; // bcrypt via pre-save
     user.passwordResetToken = undefined; // 🆕 Consume token
     await user.save();
+
+    // 📧 Send Password Reset Success SMS Alert (DLT compliant)
+    if (user.mobile) {
+      try {
+        const name = user.fullName || "User";
+        const { ID, MESSAGE } = SMS_TEMPLATE_ID.USER_CHANGE_PASSWORD_ALERT(
+          name,
+          newPassword
+        );
+
+        await sendMessage({
+          mobile: user.mobile,
+          message: MESSAGE,
+          template_id: ID,
+        });
+        console.log(`[SMS] User password reset success alert sent to ${user.mobile}`);
+      } catch (smsErr) {
+        console.error("[SMS] Failed to send user password reset success alert:", smsErr.message);
+      }
+    }
 
     return true;
   }

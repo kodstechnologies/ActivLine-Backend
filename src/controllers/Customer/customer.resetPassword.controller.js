@@ -1,6 +1,8 @@
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import Customer from "../../models/Customer/customer.model.js";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const { identifier, otp, newPassword, reenterPassword } = req.body;
@@ -46,6 +48,26 @@ export const resetPassword = asyncHandler(async (req, res) => {
   customer.otp = { code: null, expiresAt: null };
 
   await customer.save();
+
+  // 📧 Send Password Reset Success SMS Alert (DLT compliant)
+  if (customer.phoneNumber) {
+    try {
+      const name = customer.firstName || customer.userName || "Customer";
+      const { ID, MESSAGE } = SMS_TEMPLATE_ID.USER_CHANGE_PASSWORD_ALERT(
+        name,
+        newPassword
+      );
+
+      await sendMessage({
+        mobile: customer.phoneNumber,
+        message: MESSAGE,
+        template_id: ID,
+      });
+      console.log(`[SMS] Password reset success alert sent to ${customer.phoneNumber}`);
+    } catch (smsErr) {
+      console.error("[SMS] Failed to send password reset success alert:", smsErr.message);
+    }
+  }
 
   res.status(200).json({
     success: true,

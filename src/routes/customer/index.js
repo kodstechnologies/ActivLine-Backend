@@ -7,6 +7,9 @@ import passwordRoutes from "./customer.auth.routes.js";
 import fcmRoutes from "./customer.fcm.routes.js";
 import activlineRoutes from "./activline.routes.js";
 import plan from "./plan.routes.js";
+import ottRoutes from "./ott.routes.js";
+import customerRelocationRoutes from "./customerRelocation.routes.js";
+
 const router = Router();
 
 router.use("/", customerAuthRoutes);
@@ -14,11 +17,12 @@ router.use("/", customerAuthRoutes);
 router.use("/lead", leadRoutes);
 router.use("/profile", profile);
 router.use("/", plan);
+router.use("/ott", ottRoutes);
+router.use("/relocation", customerRelocationRoutes);
 // /api/customer/create, /api/customer/login, etc.
 router.use("/", customerRoutes);
 router.use("/", passwordRoutes);
 router.use("/", fcmRoutes);
 router.use("/", activlineRoutes);
-
 
 export default router;

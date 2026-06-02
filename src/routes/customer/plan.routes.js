@@ -1,5 +1,6 @@
 import express from "express";
 import { getAllProfilesWithDetails } from "../../controllers/Customer/plan.controller.js";
+import { getPlanUsageHistory } from "../../controllers/Customer/dailyDataUsage.controller.js";
 import {
   getCustomerPlanSummary,
   getCustomerPlanSummaryById,
@@ -20,6 +21,12 @@ import { allowRoles } from "../../middlewares/role.middleware.js";
 
 const router = express.Router();
 
+router.get(
+  "/plans/usage-history",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  getPlanUsageHistory
+);
 router.get("/full-details", getAllProfilesWithDetails);
 router.get(
   "/plans/summary",

@@ -7,6 +7,8 @@ import {
   getProfileDetails,
 } from "../../external/activline/activline.profile.api.js";
 import ApiError from "../../utils/ApiError.js";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 const normalizeText = (value) => {
   if (value === undefined || value === null) return "";
@@ -507,6 +509,42 @@ export const getCustomerPlanSummary = async (customerId) => {
 
     const profileDetails =
       (effectiveProfileId && profileDetailsMap.get(effectiveProfileId)) || null;
+
+    // Check usage limits and fire DLT USAGE_ALERT if consumption is high (>= 90%)
+    try {
+      if (profileDetails && customer?.phoneNumber) {
+        const usageRows = profileDetails["usage Details"] || profileDetails["service Details"] || [];
+        let totalLimit = 0;
+        let usedVolume = 0;
+        for (const row of usageRows) {
+          if (!row) continue;
+          const prop = String(row.property || "").toLowerCase();
+          const val = String(row.value || "").toLowerCase();
+          if (prop.includes("limit") || prop.includes("total")) {
+            totalLimit = parseFloat(val) || totalLimit;
+          }
+          if (prop.includes("used") || prop.includes("consumed") || prop.includes("active")) {
+            usedVolume = parseFloat(val) || usedVolume;
+          }
+        }
+        if (totalLimit > 0 && usedVolume > 0) {
+          const pct = Math.round((usedVolume / totalLimit) * 100);
+          if (pct >= 90) {
+            const { ID, MESSAGE } = SMS_TEMPLATE_ID.USAGE_ALERT(pct, totalLimit + " GB");
+            setImmediate(() => {
+              sendMessage({
+                mobile: customer.phoneNumber,
+                message: MESSAGE,
+                template_id: ID,
+              }).catch((e) => console.error("Usage alert SMS trigger failed:", e.message));
+            });
+            console.log(`[SMS] Usage alert SMS triggered for customer ${customer.phoneNumber} (Pct: ${pct}%)`);
+          }
+        }
+      }
+    } catch (usageErr) {
+      console.error("[SMS] Failed to process usage threshold check:", usageErr.message);
+    }
 
     return {
       plan: {

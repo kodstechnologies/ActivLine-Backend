@@ -8,6 +8,8 @@ import adminTicketRoutes from "./Ticket/adminTicket.routes.js";
 import dashboardIndex from "./Dashboard/index.js";
 import settingsIndex from "./settings/index.js";
 import adminCustomerRoutes from "./customer.routes.js";
+import ottAdminRoutes from "./ottAdmin.routes.js";
+
 const router = Router();
 
 /* ===== PUBLIC (NO JWT) ===== */
@@ -28,5 +30,6 @@ router.use(allowRoles("ADMIN", "SUPER_ADMIN"));
 // Protect other admin routes
 router.use("/", adminTicketRoutes);
 router.use("/", adminRoutes);         // /dashboard
+router.use("/ott", ottAdminRoutes);   // OTT management
 
 export default router;

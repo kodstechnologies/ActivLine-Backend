@@ -16,7 +16,7 @@ const allowedOrigins = [
     "http://localhost:8000",
     "https://admin.activline.co.in"
 ];
-console.log("allowedOrigins",allowedOrigins);
+// console.log("allowedOrigins",allowedOrigins);
 app.use(
     cors({
         origin: (origin, callback) => {

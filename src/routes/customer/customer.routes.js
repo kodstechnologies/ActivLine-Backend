@@ -17,10 +17,14 @@ import {
   getMyProfileImage,
   updateMyProfileImage,
   deleteMyProfileImage,
+  updateLocation,
+  getLocation,
 } from "../../controllers/Customer/customer.controller.js";
+import { getPlanUsageHistory } from "../../controllers/Customer/dailyDataUsage.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
+import { getTariffByFranchiseId } from "../../controllers/Admin/settings/franchiseTariff.controller.js";
 
 const router = Router();
 
@@ -49,34 +53,44 @@ const maybeUploadProfileImage = (req, res, next) => {
   return next();
 };
 
-router.post(
-  "/create",
-  maybeUploadCustomerFiles,
-  createCustomer
-);
+router.post("/create", maybeUploadCustomerFiles, createCustomer);
 
 // This route handles fetching all customers
 router
   .route("/customers")
-  .get(verifyJWT, allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"), getCustomers);
+  .get(
+    verifyJWT,
+    allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+    getCustomers,
+  );
 
 router.get(
   "/customers/username/:userName/overview",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  getCustomerOverviewByUserName
+  getCustomerOverviewByUserName,
 );
 
 // This new route handles fetching a single customer by their ID
 router
   .route("/customers/:customerId")
-  .get(verifyJWT, allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"), getCustomerById);
+  .get(
+    verifyJWT,
+    allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+    getCustomerById,
+  );
 
 router.get(
   "/customers/:customerId/city",
   verifyJWT,
-  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF", "CUSTOMER"),
-  getCustomerCityById
+  allowRoles(
+    "ADMIN",
+    "SUPER_ADMIN",
+    "FRANCHISE_ADMIN",
+    "ADMIN_STAFF",
+    "CUSTOMER",
+  ),
+  getCustomerCityById,
 );
 
 // Update customer by Activline userId
@@ -85,7 +99,7 @@ router.post(
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
   maybeUploadCustomerFiles,
-  updateCustomer
+  updateCustomer,
 );
 
 router.patch(
@@ -93,77 +107,77 @@ router.patch(
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
   maybeUploadCustomerFiles,
-  updateCustomerByIdForFranchise
+  updateCustomerByIdForFranchise,
 );
 
 router.get(
   "/customers/:customerId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  getCustomerMaintenanceDates
+  getCustomerMaintenanceDates,
 );
 
 router.post(
   "/customers/:customerId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  upsertCustomerMaintenanceDates
+  upsertCustomerMaintenanceDates,
 );
 
 router.patch(
   "/customers/:customerId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  upsertCustomerMaintenanceDates
+  upsertCustomerMaintenanceDates,
 );
 
 router.delete(
   "/customers/:customerId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  deleteCustomerMaintenanceDates
+  deleteCustomerMaintenanceDates,
 );
 
 router.get(
   "/customers/account/me/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  getMyAccountMaintenanceSummary
+  getMyAccountMaintenanceSummary,
 );
 
 router.get(
   "/customers/account/:accountId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
-  getCustomerMaintenanceDatesByAccountId
+  getCustomerMaintenanceDatesByAccountId,
 );
 
 router.post(
   "/customers/account/:accountId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
-  upsertCustomerMaintenanceDatesByAccountId
+  upsertCustomerMaintenanceDatesByAccountId,
 );
 
 router.patch(
   "/customers/account/:accountId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
-  upsertCustomerMaintenanceDatesByAccountId
+  upsertCustomerMaintenanceDatesByAccountId,
 );
 
 router.delete(
   "/customers/account/:accountId/maintenance",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN", "CUSTOMER"),
-  deleteCustomerMaintenanceDatesByAccountId
+  deleteCustomerMaintenanceDatesByAccountId,
 );
 
 router.get(
   "/me/profile-image",
   verifyJWT,
   allowRoles("CUSTOMER"),
-  getMyProfileImage
+  getMyProfileImage,
 );
 
 router.put(
@@ -171,14 +185,29 @@ router.put(
   verifyJWT,
   allowRoles("CUSTOMER"),
   maybeUploadProfileImage,
-  updateMyProfileImage
+  updateMyProfileImage,
 );
 
 router.delete(
   "/me/profile-image",
   verifyJWT,
   allowRoles("CUSTOMER"),
-  deleteMyProfileImage
+  deleteMyProfileImage,
 );
+// getLocation
+// update customer location
+router.post(
+  "/location/update",
+  // verifyJWT,
+  // allowRoles("CUSTOMER"),
+  updateLocation,
+);
+// user current location
+router.get("/location", verifyJWT, allowRoles("CUSTOMER"), getLocation);
 
+// tarrif route
+router.get("/tariff/:franchiseId", getTariffByFranchiseId);
 export default router;
+
+// data use
+router.get("/plan/usage-history", verifyJWT, getPlanUsageHistory);

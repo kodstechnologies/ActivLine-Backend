@@ -1,5 +1,9 @@
 import { Router } from "express";
-import { fetchFranchiseAccounts } from "../../controllers/franchise/franchise.controller.js";
+import {
+  fetchFranchiseAccounts,
+  getFranchiseAvailability,
+  updateFranchiseAvailability,
+} from "../../controllers/franchise/franchise.controller.js";
 import { fetchAllAdmins } from "../../controllers/franchise/f.admin.controller.js";
 import { fetchSubPlans } from "../../controllers/franchise/subPlan.controller.js";
 import { fetchGroupDetails } from "../../controllers/franchise/groupDetails.controller.js";
@@ -22,7 +26,7 @@ router.get(
   "/report-summary",
   verifyJWT,
   allowRoles("ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
-  getReportSummary
+  getReportSummary,
 );
 
 router.get("/", fetchFranchiseAccounts);
@@ -31,11 +35,20 @@ router.get(
   "/:accountId/customers/count",
   verifyJWT,
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
-  getFranchiseCustomerCount
+  getFranchiseCustomerCount,
 );
 router.get("/:accountId/profiles", getProfiles);
 router.get("/:accountId/profiles/:profileId", getProfiles);
 router.get("/:accountId/profile-details/:profileId", getProfileDetails);
 router.get("/:accountId/admins", getFranchiseAdmins);
+
+router.get("/:accountId/availability", verifyJWT, getFranchiseAvailability);
+
+router.put(
+  "/:accountId/availability",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
+  updateFranchiseAvailability,
+);
 
 export default router;

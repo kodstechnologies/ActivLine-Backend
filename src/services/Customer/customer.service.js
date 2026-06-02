@@ -6,18 +6,23 @@ import {
   createCustomerRepo,
   findByIdentifier,
   findByMobile,
-   updateCustomerRepo,
-   findCustomerByActivlineId
+  updateCustomerRepo,
+  findCustomerByActivlineId,
 } from "../../repositories/Customer/customer.repository.js";
 
 import { generateReferralCode } from "../../utils/referralCode.js";
+import { getProfileByPhone } from "../../external/activline/activline.profile.api.js";
 import ApiError from "../../utils/ApiError.js";
 import FormData from "form-data";
 import fs from "fs";
 import activlineClient from "../../external/activline/activline.client.js";
-import { uploadOnCloudinary,deleteFromCloudinary } from "../../utils/cloudinary.js";
+import {
+  uploadOnCloudinary,
+  deleteFromCloudinary,
+} from "../../utils/cloudinary.js";
 // import { createCustomer } from "../../repositories/Customer/customer.repository.js";
 import Customer from "../../models/Customer/customer.model.js";
+import Referral from "../../models/Customer/referral.model.js";
 
 const uploadCustomerDocumentsForUpdate = async (files) => {
   const documentUrls = {};
@@ -45,7 +50,7 @@ const uploadCustomerDocumentsForUpdate = async (files) => {
             if (result) {
               documentUrls[fileType] = result.secure_url;
             }
-          })
+          }),
         );
       }
     }
@@ -66,9 +71,6 @@ const uploadCustomerDocumentsForUpdate = async (files) => {
     });
   }
 };
-
-
-
 
 export const loginCustomer = async ({ identifier, password }) => {
   const customer = await CustomerRepo.findByIdentifier(identifier);
@@ -93,7 +95,7 @@ export const loginCustomer = async ({ identifier, password }) => {
       email: customer.email,
     },
     process.env.ACCESS_TOKEN_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
 
   return {
@@ -109,41 +111,44 @@ export const loginCustomer = async ({ identifier, password }) => {
   };
 };
 
-
-
 export const getMessagesByRoom = async (roomId) => {
   return ChatMessageRepo.getMessagesByRoom(roomId);
 };
 
-
-
-
-
-
 export const createCustomerService = async (payload, files) => {
   const pickFirst = (...values) => {
     for (const value of values) {
-      if (value !== undefined && value !== null && String(value).trim() !== "") {
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ""
+      ) {
         return value;
       }
     }
     return undefined;
   };
-  const rawPhone = payload.phoneNumber !== undefined && payload.phoneNumber !== null
-    ? String(payload.phoneNumber).trim()
-    : "";
+  const rawPhone =
+    payload.phoneNumber !== undefined && payload.phoneNumber !== null
+      ? String(payload.phoneNumber).trim()
+      : "";
   if (rawPhone) {
-    const existingByPhone = await Customer.findOne({ phoneNumber: rawPhone }).select("_id");
+    const existingByPhone = await Customer.findOne({
+      phoneNumber: rawPhone,
+    }).select("_id");
     if (existingByPhone) {
       throw new ApiError(409, "Phone number already exists");
     }
   }
 
-  const rawEmail = payload.emailId !== undefined && payload.emailId !== null
-    ? String(payload.emailId).trim().toLowerCase()
-    : "";
+  const rawEmail =
+    payload.emailId !== undefined && payload.emailId !== null
+      ? String(payload.emailId).trim().toLowerCase()
+      : "";
   if (rawEmail) {
-    const existingByEmail = await Customer.findOne({ emailId: rawEmail }).select("_id");
+    const existingByEmail = await Customer.findOne({
+      emailId: rawEmail,
+    }).select("_id");
     if (existingByEmail) {
       throw new ApiError(409, "Email already exists");
     }
@@ -186,7 +191,10 @@ export const createCustomerService = async (payload, files) => {
 
     for (let i = passwordChars.length - 1; i > 0; i -= 1) {
       const j = crypto.randomInt(0, i + 1);
-      [passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]];
+      [passwordChars[i], passwordChars[j]] = [
+        passwordChars[j],
+        passwordChars[i],
+      ];
     }
 
     const randomPart = passwordChars.join("");
@@ -210,7 +218,11 @@ export const createCustomerService = async (payload, files) => {
   const formData = new FormData();
 
   // Use the determined username for Activline and local DB
-  Object.entries({ ...payload, userName: finalUserName, password: finalPassword }).forEach(([key, value]) => {
+  Object.entries({
+    ...payload,
+    userName: finalUserName,
+    password: finalPassword,
+  }).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       formData.append(key, value);
     }
@@ -223,23 +235,39 @@ export const createCustomerService = async (payload, files) => {
   if (files?.addressFile) {
     formData.append(
       "addressFile",
-      fs.createReadStream(files.addressFile[0].path)
+      fs.createReadStream(files.addressFile[0].path),
     );
   }
 
   // 🔹 2. Create user in Activline
-  const activlineData = await activlineClient.post(
-    "/add_user",
-    formData,
-    { headers: formData.getHeaders() }
-  );
-
+  const activlineData = await activlineClient.post("/add_user", formData, {
+    headers: formData.getHeaders(),
+  });
+  console.log("Activeline customer data", activlineData);
   if (activlineData?.status !== "success") {
     throw new ApiError(
       502,
-      activlineData?.message || "Failed to create user in Activline"
+      activlineData?.message || "Failed to create user in Activline",
     );
   }
+
+  // 🎯 Fetch Jaze profile by phone synchronously to extract their assigned referral code
+  let ownReferralCode = null;
+  // try {
+  const profileResponse = await getProfileByPhone(payload.phoneNumber);
+  console.log("Profile response:", profileResponse);
+  const profileData = Array.isArray(profileResponse?.data)
+    ? profileResponse.data[0]
+    : profileResponse?.data || profileResponse;
+
+  ownReferralCode =
+    profileData?.UserSetting?.referral_code ||
+    profileData?.referral_code ||
+    null;
+  //   console.log("Successfully fetched new user's Jaze-assigned referral code:", ownReferralCode);
+  // } catch (profileErr) {
+  //   console.error("Failed to fetch Jaze profile by phone for referral code:", profileErr.message);
+  // }
 
   // 🔹 3. Validate referral code if user used one
   let referrer = null;
@@ -268,149 +296,164 @@ export const createCustomerService = async (payload, files) => {
   }
 
   // 🔹 4. Save customer
- // ❌ Never store plain password inside rawPayload
-const cleanPayload = { ...payload };
-delete cleanPayload.password;
+  // ❌ Never store plain password inside rawPayload
+  const cleanPayload = { ...payload };
+  delete cleanPayload.password;
 
-const savedCustomer = await createCustomerRepo({ // The pre-save hook will generate the referral code
-  /* ===============================
+  const savedCustomer = await createCustomerRepo({
+    // Customer own refer code
+    referral: {
+      code:
+        ownReferralCode ||
+        activlineData?.message?.UserSetting?.referral_code ||
+        null,
+    },
+    /* ===============================   
      🔹 CORE DETAILS
   =============================== */
-  userGroupId: payload.userGroupId,
-  accountId: payload.accountId,
-  userName: finalUserName, // Use determined username
-  phoneNumber: payload.phoneNumber,
-  emailId: payload.emailId,
-  password: finalPassword, // will hash if schema has pre-save hook
-  userState: payload.userState,
-  userType: payload.userType,
-  activationDate: payload.activationDate,
-  expirationDate: payload.expirationDate,
-  customActivationDate: payload.customActivationDate,
-  customExpirationDate: payload.customExpirationDate,
+    userGroupId: payload.userGroupId,
+    accountId: payload.accountId,
+    userName: finalUserName, // Use determined username
+    phoneNumber: payload.phoneNumber,
+    emailId: payload.emailId,
+    password: finalPassword, // will hash if schema has pre-save hook
+    userState: payload.userState,
+    userType: payload.userType,
+    activationDate: payload.activationDate,
+    expirationDate: payload.expirationDate,
+    customActivationDate: payload.customActivationDate,
+    customExpirationDate: payload.customExpirationDate,
 
-  /* ===============================
+    /* ===============================
      🔹 USER DETAILS
   =============================== */
-  firstName: payload.firstName,
-  lastName: payload.lastName,
-  altPhoneNumber: payload.altPhoneNumber,
-  altEmailId: payload.altEmailId,
+    firstName: payload.firstName,
+    lastName: payload.lastName,
+    altPhoneNumber: payload.altPhoneNumber,
+    altEmailId: payload.altEmailId,
 
-  /* ===============================
+    /* ===============================
      🔹 CUSTOMER ADDRESS
   =============================== */
-  address: {
-    line1: payload.address_line1,
-    line2: payload.address_line2,
-    city: payload.address_city,
-    pin: payload.address_pin,
-    state: payload.address_state,
-    country: payload.address_country,
-  },
+    address: {
+      line1: payload.address_line1,
+      line2: payload.address_line2,
+      city: payload.address_city,
+      pin: payload.address_pin,
+      state: payload.address_state,
+      country: payload.address_country,
+    },
 
-  /* ===============================
+    /* ===============================
      🔹 INSTALLATION ADDRESS
   =============================== */
-  installationAddress: {
-    line1: pickFirst(
-      payload.installation_address_line1,
-      payload["installationAddress-line1"],
-      payload.installationAddress_line1,
-      payload.installationAddressLine1
-    ),
-    line2: pickFirst(
-      payload.installation_address_line2,
-      payload["installationAddress-line2"],
-      payload.installationAddress_line2,
-      payload.installationAddressLine2
-    ),
-    city: pickFirst(
-      payload.installation_address_city,
-      payload["installationAddress-city"],
-      payload.installationAddress_city,
-      payload.installationAddressCity
-    ),
-    pin: pickFirst(
-      payload.installation_address_pin,
-      payload["installationAddress-pin"],
-      payload.installationAddress_pin,
-      payload.installationAddressPin
-    ),
-    state: pickFirst(
-      payload.installation_address_state,
-      payload["installationAddress-state"],
-      payload.installationAddress_state,
-      payload.installationAddressState
-    ),
-    country: pickFirst(
-      payload.installation_address_country,
-      payload["installationAddress-country"],
-      payload.installationAddress_country,
-      payload.installationAddressCountry
-    ),
-  },
+    installationAddress: {
+      line1: pickFirst(
+        payload.installation_address_line1,
+        payload["installationAddress-line1"],
+        payload.installationAddress_line1,
+        payload.installationAddressLine1,
+      ),
+      line2: pickFirst(
+        payload.installation_address_line2,
+        payload["installationAddress-line2"],
+        payload.installationAddress_line2,
+        payload.installationAddressLine2,
+      ),
+      city: pickFirst(
+        payload.installation_address_city,
+        payload["installationAddress-city"],
+        payload.installationAddress_city,
+        payload.installationAddressCity,
+      ),
+      pin: pickFirst(
+        payload.installation_address_pin,
+        payload["installationAddress-pin"],
+        payload.installationAddress_pin,
+        payload.installationAddressPin,
+      ),
+      state: pickFirst(
+        payload.installation_address_state,
+        payload["installationAddress-state"],
+        payload.installationAddress_state,
+        payload.installationAddressState,
+      ),
+      country: pickFirst(
+        payload.installation_address_country,
+        payload["installationAddress-country"],
+        payload.installationAddress_country,
+        payload.installationAddressCountry,
+      ),
+    },
 
-  /* ===============================
+    /* ===============================
      🔹 BILLING / OVERRIDE
   =============================== */
-  overridePriceEnable: payload.overridePriceEnable,
-  overrideAmount: payload.overrideAmount,
-  overrideAmountBasedOn: payload.overrideAmountBasedOn,
-  createBilling: payload.createBilling,
+    overridePriceEnable: payload.overridePriceEnable,
+    overrideAmount: payload.overrideAmount,
+    overrideAmountBasedOn: payload.overrideAmountBasedOn,
+    createBilling: payload.createBilling,
 
-  /* ===============================
+    /* ===============================
      🔹 LOCATION
   =============================== */
-  locationDetailsNotImport: payload.location_details_not_import,
-  collectionAreaImport: payload.collection_area_import,
-  collectionStreetImport: payload.collection_street_import,
-  collectionBlockImport: payload.collection_block_import,
+    locationDetailsNotImport: payload.location_details_not_import,
+    collectionAreaImport: payload.collection_area_import,
+    collectionStreetImport: payload.collection_street_import,
+    collectionBlockImport: payload.collection_block_import,
 
-  /* ===============================
+    /* ===============================
      🔹 AUTH FLAGS
   =============================== */
-  disableUserIpAuth: payload.disableUserIpAuth,
-  disableUserMacAuth: payload.disableUserMacAuth,
-  disableUserHotspotAuth: payload.disableUserHotspotAuth,
+    disableUserIpAuth: payload.disableUserIpAuth,
+    disableUserMacAuth: payload.disableUserMacAuth,
+    disableUserHotspotAuth: payload.disableUserHotspotAuth,
 
-  /* ===============================
+    /* ===============================
      🔹 CAF
   =============================== */
-  cafNum: payload.caf_num,
+    cafNum: payload.caf_num,
 
-  /* ===============================
+    /* ===============================
      🔹 ACTIVLINE ID
   =============================== */
-  activlineUserId: activlineData?.message?.userId?.toString(),
+    activlineUserId: activlineData?.message?.userId?.toString(),
 
-  /* ===============================
+    /* ===============================
      🔹 DOCUMENTS
   =============================== */
-  documents: {
-    idFile: null,
-    addressFile: null,
-    cafFile: null,
-    reportFile: null,
-    signFile: null,
-    profilePicFile: null,
-  },
+    documents: {
+      idFile: null,
+      addressFile: null,
+      cafFile: null,
+      reportFile: null,
+      signFile: null,
+      profilePicFile: null,
+    },
 
-  /* ===============================
+    /* ===============================
      🔹 AUDIT
   =============================== */
-  rawPayload: cleanPayload,
-});
+    rawPayload: cleanPayload,
+  });
 
-
-  // 🔹 5. Increase referrer count AFTER customer creation
+  // 🔹 5. Increase referrer count and record referral in separate schema AFTER customer creation
   if (referrer) {
-    await Customer.updateOne(
-      { _id: referrer._id },
-      { $inc: { "referral.referredCount": 1 } }
-    );
+    await Promise.all([
+      Customer.updateOne(
+        { _id: referrer._id },
+        { $inc: { "referral.referredCount": 1 } }
+      ),
+      Referral.create({
+        referrer: referrer._id,
+        referee: savedCustomer._id,
+        codeUsed: referralCode,
+        referredAt: new Date(),
+        referralCompleted: false,
+      })
+    ]);
   }
-
+  console.log("✅ Created customer:", savedCustomer);
   return {
     customer: savedCustomer,
     credentials: {
@@ -496,7 +539,8 @@ const buildCustomerUpdateData = (payload) => {
     if (payload.address_city) update.address.city = payload.address_city;
     if (payload.address_pin) update.address.pin = payload.address_pin;
     if (payload.address_state) update.address.state = payload.address_state;
-    if (payload.address_country) update.address.country = payload.address_country;
+    if (payload.address_country)
+      update.address.country = payload.address_country;
   }
 
   /* ===============================
@@ -513,36 +557,29 @@ const buildCustomerUpdateData = (payload) => {
     update.installationAddress = {};
 
     if (payload.installation_address_line1)
-      update.installationAddress.line1 =
-        payload.installation_address_line1;
+      update.installationAddress.line1 = payload.installation_address_line1;
 
     if (payload.installation_address_line2)
-      update.installationAddress.line2 =
-        payload.installation_address_line2;
+      update.installationAddress.line2 = payload.installation_address_line2;
 
     if (payload.installation_address_city)
-      update.installationAddress.city =
-        payload.installation_address_city;
+      update.installationAddress.city = payload.installation_address_city;
 
     if (payload.installation_address_pin)
-      update.installationAddress.pin =
-        payload.installation_address_pin;
+      update.installationAddress.pin = payload.installation_address_pin;
 
     if (payload.installation_address_state)
-      update.installationAddress.state =
-        payload.installation_address_state;
+      update.installationAddress.state = payload.installation_address_state;
 
     if (payload.installation_address_country)
-      update.installationAddress.country =
-        payload.installation_address_country;
+      update.installationAddress.country = payload.installation_address_country;
   }
 
   /* ===============================
    🔹 LOCATION MAPPING
   =============================== */
   if (payload.location_details_not_import)
-    update.locationDetailsNotImport =
-      payload.location_details_not_import;
+    update.locationDetailsNotImport = payload.location_details_not_import;
 
   if (payload.collection_area_import)
     update.collectionAreaImport = payload.collection_area_import;
@@ -559,14 +596,12 @@ const buildCustomerUpdateData = (payload) => {
   if (payload.overridePriceEnable)
     update.overridePriceEnable = payload.overridePriceEnable;
 
-  if (payload.overrideAmount)
-    update.overrideAmount = payload.overrideAmount;
+  if (payload.overrideAmount) update.overrideAmount = payload.overrideAmount;
 
   if (payload.overrideAmountBasedOn)
     update.overrideAmountBasedOn = payload.overrideAmountBasedOn;
 
-  if (payload.createBilling)
-    update.createBilling = payload.createBilling;
+  if (payload.createBilling) update.createBilling = payload.createBilling;
 
   /* ===============================
    🔹 CAF / DOCUMENT INFO
@@ -588,8 +623,7 @@ const buildCustomerUpdateData = (payload) => {
   /* ===============================
    🔹 NOTIFICATIONS
   =============================== */
-  if (payload.notifyUserSms)
-    update.notifyUserSms = payload.notifyUserSms;
+  if (payload.notifyUserSms) update.notifyUserSms = payload.notifyUserSms;
 
   /* ===============================
    🔹 AUDIT (OPTIONAL BUT GOOD)
@@ -599,12 +633,10 @@ const buildCustomerUpdateData = (payload) => {
   return update;
 };
 
-
-
 export const updateCustomerService = async (
   activlineUserId,
   payload,
-  files
+  files,
 ) => {
   // 1️⃣ Call Activline (already works)
   const formData = new FormData();
@@ -642,16 +674,10 @@ export const updateCustomerService = async (
   });
 
   // 4️⃣ UPDATE MONGODB
-  const updatedCustomer = await updateCustomerRepo(
-    activlineUserId,
-    updateData
-  );
+  const updatedCustomer = await updateCustomerRepo(activlineUserId, updateData);
 
   return updatedCustomer;
 };
-
-
-
 
 export const loginCustomerService = async ({
   username,
@@ -664,11 +690,9 @@ export const loginCustomerService = async ({
   formData.append("username", username);
   formData.append("password", password);
 
-  const res = await activlineClient.post(
-    "/authenticate_user",
-    formData,
-    { headers: formData.getHeaders() }
-  );
+  const res = await activlineClient.post("/authenticate_user", formData, {
+    headers: formData.getHeaders(),
+  });
 
   const data = res.data;
 
@@ -686,13 +710,13 @@ export const loginCustomerService = async ({
   const accessToken = jwt.sign(
     { activlineUserId, accountId, role: "CUSTOMER" },
     process.env.ACCESS_TOKEN_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "15m" },
   );
 
   const refreshToken = jwt.sign(
     { activlineUserId, accountId, sessionId },
     process.env.REFRESH_TOKEN_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: "7d" },
   );
 
   // 🔹 3. Store refresh token (per device)
@@ -712,9 +736,6 @@ export const loginCustomerService = async ({
     expiresIn: 900,
   };
 };
-
-
-
 
 export const getMyProfileService = async (userId) => {
   const customer = await Customer.findById(userId).lean();
@@ -805,9 +826,10 @@ export const getMyProfileService = async (userId) => {
 
 // services/Customer/customer.service.js
 
-
 export const getProfileImageService = async (userId) => {
-  const customer = await Customer.findById(userId).select("documents.profilePicFile");
+  const customer = await Customer.findById(userId).select(
+    "documents.profilePicFile",
+  );
 
   if (!customer) {
     throw new ApiError(404, "Customer not found");
@@ -873,4 +895,3 @@ export const deleteProfileImageService = async (userId) => {
   customer.documents.profilePicFile = null;
   await customer.save();
 };
-
