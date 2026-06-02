@@ -35,11 +35,7 @@ export const initSocket = (server) => {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
-<<<<<<< HEAD
-    "https://admin.activline.co.in"
-=======
-    "http://15.206.235.221",
->>>>>>> origin/umesh/ticketchat
+    "https://admin.activline.co.in",
   ];
 
   if (process.env.CORS_ORIGIN) {
@@ -47,21 +43,6 @@ export const initSocket = (server) => {
       ...process.env.CORS_ORIGIN.split(",").map((o) => o.trim()),
     );
   }
-
-<<<<<<< HEAD
-io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => {
-      if (!origin || origin === "null") return callback(null, true);
-      if (
-        allowedOrigins.includes(origin) ||
-        origin.startsWith("http://localhost") ||
-        origin.startsWith("https://admin.activline.co.in")
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by Socket.IO CORS"));
-=======
   io = new Server(server, {
     cors: {
       origin: (origin, callback) => {
@@ -77,7 +58,7 @@ io = new Server(server, {
       },
       methods: ["GET", "POST"],
       credentials: true,
->>>>>>> origin/umesh/ticketchat
+
     },
     transports: ["websocket"],
     maxHttpBufferSize: 20 * 1024 * 1024, // 🔥 20MB REQUIRED
