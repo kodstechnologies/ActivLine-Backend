@@ -20,21 +20,21 @@ export const initSocket = (server) => {
     throw new Error("Socket.io init requires a valid HTTP server");
   }
   /* ===============================
-     🌐 ALLOWED ORIGINS (from env)
+     🌐 ALLOWED ORIGINS
      =============================== */
-  const allowedOrigins = (
-    process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || ""
-  )
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:64255",
+    "https://admin.activline.co.in"
+  ];
 
-  const allowedOriginPrefixes = (
-    process.env.ALLOWED_ORIGIN_PREFIXES || ""
-  )
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  if (process.env.CORS_ORIGIN) {
+    allowedOrigins.push(
+      ...process.env.CORS_ORIGIN.split(",").map(o => o.trim())
+    );
+  }
 
 io = new Server(server, {
   cors: {
@@ -42,7 +42,8 @@ io = new Server(server, {
       if (!origin || origin === "null") return callback(null, true);
       if (
         allowedOrigins.includes(origin) ||
-        allowedOriginPrefixes.some((p) => origin.startsWith(p))
+        origin.startsWith("http://localhost") ||
+        origin.startsWith("http://127.0.0.1")
       ) {
         return callback(null, true);
       }
