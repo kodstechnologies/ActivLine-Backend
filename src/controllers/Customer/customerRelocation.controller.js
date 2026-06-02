@@ -24,7 +24,6 @@ export const createRelocation = asyncHandler(async (req, res) => {
   }
 
   const data = await relocationService.createRelocationService(req.user, value);
-  console.log("Relocation request created:", data);
   return res
     .status(201)
     .json(
@@ -102,6 +101,7 @@ export const deleteRelocation = asyncHandler(async (req, res) => {
 // @route GET /api/customer/relocation/me
 export const getMyRelocation = asyncHandler(async (req, res) => {
   const data = await relocationService.getMyRelocationService(req.user);
+
   return res
     .status(200)
     .json(

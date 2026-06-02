@@ -7,6 +7,7 @@ import ChatMessage from "../../models/chat/chatMessage.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import ActivityLog from "../../models/ActivityLog/activityLog.model.js";
 import { createActivityLog } from "../ActivityLog/activityLog.service.js";
+import { getIO } from "../../socket/index.js";
 import ApiError from "../../utils/ApiError.js";
 import crypto from "crypto";
 import { notifyCustomer } from "../Notification/customer.notification.service.js";
@@ -21,32 +22,44 @@ import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 const getResolvedTicketSMSTemplate = (msgText, customerName, roomId) => {
   const normalized = String(msgText || "").toLowerCase();
-  
+
   if (normalized.includes("website") || normalized.includes("portal")) {
     return {
       ID: 1007608792688525372,
-      MESSAGE: `Dear customer, Website issue has been resolved and working fine now. As confirming with you we are closing the Ticket ${roomId}Regards Activline Telecom.`
+      MESSAGE: `Dear customer, Website issue has been resolved and working fine now. As confirming with you we are closing the Ticket ${roomId}Regards Activline Telecom.`,
     };
   }
-  
-  if (normalized.includes("fiber") || normalized.includes("wire") || normalized.includes("physical")) {
+
+  if (
+    normalized.includes("fiber") ||
+    normalized.includes("wire") ||
+    normalized.includes("physical")
+  ) {
     return {
       ID: 1007256105097447042,
-      MESSAGE: `Dear customer, Fiber  issue has been resolved and internet is working fine now. As confirming with you we are closing the ticket ${roomId}Regards Activline Telecom.`
+      MESSAGE: `Dear customer, Fiber  issue has been resolved and internet is working fine now. As confirming with you we are closing the ticket ${roomId}Regards Activline Telecom.`,
     };
   }
-  
-  if (normalized.includes("speed") || normalized.includes("slow") || normalized.includes("bandwidth")) {
+
+  if (
+    normalized.includes("speed") ||
+    normalized.includes("slow") ||
+    normalized.includes("bandwidth")
+  ) {
     return {
       ID: 1007386287270172838,
-      MESSAGE: `Dear customer, Speed issue has been resolved and internet is working fine now. As confirming with you we are closing the ticket ${roomId} Regards Activline Telecom.`
+      MESSAGE: `Dear customer, Speed issue has been resolved and internet is working fine now. As confirming with you we are closing the ticket ${roomId} Regards Activline Telecom.`,
     };
   }
-  
-  if (normalized.includes("disconnect") || normalized.includes("drop") || normalized.includes("flapping")) {
+
+  if (
+    normalized.includes("disconnect") ||
+    normalized.includes("drop") ||
+    normalized.includes("flapping")
+  ) {
     return {
       ID: 1007649448830335851,
-      MESSAGE: `Dear customer, Frequent disconnection issue has been resolved and internet is working fine now. As confirming with you we are closing the Ticket ${roomId}Regards Activline Telecom.`
+      MESSAGE: `Dear customer, Frequent disconnection issue has been resolved and internet is working fine now. As confirming with you we are closing the Ticket ${roomId}Regards Activline Telecom.`,
     };
   }
 
@@ -172,7 +185,9 @@ export const openChatIfNotExists = async (req) => {
 
   // Dynamic DLT Ticket Raised SMS Dispatch
   try {
-    const customer = await Customer.findById(customerId).select("phoneNumber userName firstName");
+    const customer = await Customer.findById(customerId).select(
+      "phoneNumber userName firstName",
+    );
     if (customer && customer.phoneNumber) {
       setImmediate(async () => {
         try {
@@ -183,19 +198,31 @@ export const openChatIfNotExists = async (req) => {
           if (msgText.includes("website") || msgText.includes("portal")) {
             smsData = {
               ID: 1007996733874596669,
-              MESSAGE: `Dear customer, As per your complaint regarding website issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`
+              MESSAGE: `Dear customer, As per your complaint regarding website issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`,
             };
-          } else if (msgText.includes("fiber") || msgText.includes("wire") || msgText.includes("physical")) {
+          } else if (
+            msgText.includes("fiber") ||
+            msgText.includes("wire") ||
+            msgText.includes("physical")
+          ) {
             smsData = {
               ID: 1007622560254686299,
-              MESSAGE: `Dear customer, As per your complaint regarding Fiber issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`
+              MESSAGE: `Dear customer, As per your complaint regarding Fiber issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`,
             };
-          } else if (msgText.includes("speed") || msgText.includes("slow") || msgText.includes("bandwidth")) {
+          } else if (
+            msgText.includes("speed") ||
+            msgText.includes("slow") ||
+            msgText.includes("bandwidth")
+          ) {
             smsData = {
               ID: 1007970476073105752,
-              MESSAGE: `Dear customer, As per your complaint regarding speed issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`
+              MESSAGE: `Dear customer, As per your complaint regarding speed issue on ${currentDate} we raised a ticket for the same. Ticket number is ${room._id}Regards Activline Telecom`,
             };
-          } else if (msgText.includes("disconnect") || msgText.includes("drop") || msgText.includes("flapping")) {
+          } else if (
+            msgText.includes("disconnect") ||
+            msgText.includes("drop") ||
+            msgText.includes("flapping")
+          ) {
             smsData = SMS_TEMPLATE_ID.FREQUENT_DISCONNECTION
               ? SMS_TEMPLATE_ID.FREQUENT_DISCONNECTION(currentDate, room._id)
               : null;
@@ -205,7 +232,7 @@ export const openChatIfNotExists = async (req) => {
             smsData = SMS_TEMPLATE_ID.RAISE_TICKET_NOTIFICATION(
               customer.userName || customer.firstName || "Customer",
               room._id,
-              message?.trim() ? message.trim().slice(0, 30) : "General Issue"
+              message?.trim() ? message.trim().slice(0, 30) : "General Issue",
             );
           }
 
@@ -215,10 +242,15 @@ export const openChatIfNotExists = async (req) => {
               message: smsData.MESSAGE,
               template_id: smsData.ID,
             });
-            console.log(`[SMS] Ticket Raised SMS successfully sent to ${customer.phoneNumber} for ticket ${room._id}`);
+            console.log(
+              `[SMS] Ticket Raised SMS successfully sent to ${customer.phoneNumber} for ticket ${room._id}`,
+            );
           }
         } catch (smsErr) {
-          console.error("[SMS] Failed to send raised ticket notification:", smsErr.message);
+          console.error(
+            "[SMS] Failed to send raised ticket notification:",
+            smsErr.message,
+          );
         }
       });
     }
@@ -313,7 +345,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     const senderModel =
       req.user.role === "FRANCHISE_ADMIN" ? "FranchiseAdmin" : "Admin";
 
-    await ChatMsgRepo.saveMessage({
+    const systemMsg = await ChatMsgRepo.saveMessage({
       roomId,
       senderId: req.user._id,
       senderModel,
@@ -323,12 +355,22 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       statusAtThatTime: "CLOSED",
     });
 
+    try {
+      const populatedMsg = await ChatMessage.findById(systemMsg._id).populate(
+        "senderId",
+        "fullName name email mobile role"
+      );
+      getIO().to(roomId).emit("new-message", populatedMsg);
+    } catch (socketErr) {
+      console.error("❌ Failed to emit closed system message via socket:", socketErr.message);
+    }
+
     // 4️⃣ Clean up OLD room-linked notifications (same as original design)
     await Promise.all([
       CustomerNotification.deleteMany({ "data.roomId": roomId }),
       Notification.deleteMany({ "data.roomId": roomId }),
     ]);
-
+    console.log(room.customer._id);
     // 5️⃣ Notify customer about closure
     try {
       await notifyCustomer({
@@ -389,7 +431,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
         const { ID, MESSAGE } = getResolvedTicketSMSTemplate(
           firstMsg?.message || "",
           customerName,
-          roomId
+          roomId,
         );
         await sendMessage({
           mobile: room.customer.phoneNumber,
@@ -406,38 +448,51 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Handle reopen ticket notification (transitions from RESOLVED/CLOSED to OPEN)
-  if ((currentStatus === "RESOLVED" || currentStatus === "CLOSED") && newStatus === "OPEN") {
+  if (
+    (currentStatus === "RESOLVED" || currentStatus === "CLOSED") &&
+    newStatus === "OPEN"
+  ) {
     try {
-      const customer = await Customer.findById(room.customer).select("phoneNumber userName firstName");
+      const customer = await Customer.findById(room.customer).select(
+        "phoneNumber userName firstName",
+      );
       if (customer && customer.phoneNumber) {
         setImmediate(async () => {
           try {
             const reopenCount = await ActivityLog.countDocuments({
               module: "TICKET",
               targetId: roomId,
-              "metadata.to": "OPEN"
+              "metadata.to": "OPEN",
             });
             const actualCount = reopenCount + 1;
 
             const { ID, MESSAGE } = SMS_TEMPLATE_ID.REOPEN_TICKET_NOTIFICATION(
               customer.userName || customer.firstName || "Customer",
               roomId,
-              actualCount
+              actualCount,
             );
 
             await sendMessage({
               mobile: customer.phoneNumber,
               message: MESSAGE,
-              template_id: ID
+              template_id: ID,
             });
-            console.log(`[SMS] Reopen SMS alert sent successfully to ${customer.phoneNumber} for ticket ${roomId} (reopened ${actualCount} times).`);
+            console.log(
+              `[SMS] Reopen SMS alert sent successfully to ${customer.phoneNumber} for ticket ${roomId} (reopened ${actualCount} times).`,
+            );
           } catch (smsErr) {
-            console.error("[SMS] Failed to send reopen SMS alert:", smsErr.message);
+            console.error(
+              "[SMS] Failed to send reopen SMS alert:",
+              smsErr.message,
+            );
           }
         });
       }
     } catch (err) {
-      console.error("[SMS] Failed to trigger reopen ticket check:", err.message);
+      console.error(
+        "[SMS] Failed to trigger reopen ticket check:",
+        err.message,
+      );
     }
   }
 
@@ -469,7 +524,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     statusMessage += `\n\nTicket: ${firstCustomerMsg.message}`;
   }
 
-  await ChatMsgRepo.saveMessage({
+  const systemMsg = await ChatMsgRepo.saveMessage({
     roomId,
     senderId: req.user._id,
     senderModel:
@@ -479,6 +534,16 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     messageType: "TEXT",
     statusAtThatTime: newStatus,
   });
+
+  try {
+    const populatedMsg = await ChatMessage.findById(systemMsg._id).populate(
+      "senderId",
+      "fullName name email mobile role"
+    );
+    getIO().to(roomId).emit("new-message", populatedMsg);
+  } catch (socketErr) {
+    console.error("❌ Failed to emit status update system message via socket:", socketErr.message);
+  }
 
   // ✅ 🔔 NOTIFY CUSTOMER (ALL STATUS CHANGES)
   try {
@@ -511,7 +576,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       const { ID, MESSAGE } = getResolvedTicketSMSTemplate(
         firstCustomerMsg?.message || "",
         customerName,
-        roomId
+        roomId,
       );
       await sendMessage({
         mobile: room.customer.phoneNumber,
@@ -801,7 +866,7 @@ export const resolveTicketByCustomer = async (req, roomId) => {
     statusMessage += `\n\nTicket: ${firstCustomerMsg.message}`;
   }
 
-  await ChatMsgRepo.saveMessage({
+  const systemMsg = await ChatMsgRepo.saveMessage({
     roomId,
     senderId: req.user._id,
     senderModel: "Customer",
@@ -810,6 +875,16 @@ export const resolveTicketByCustomer = async (req, roomId) => {
     messageType: "TEXT",
     statusAtThatTime: "RESOLVED",
   });
+
+  try {
+    const populatedMsg = await ChatMessage.findById(systemMsg._id).populate(
+      "senderId",
+      "fullName name email mobile role"
+    );
+    getIO().to(roomId).emit("new-message", populatedMsg);
+  } catch (socketErr) {
+    console.error("❌ Failed to emit customer resolve system message via socket:", socketErr.message);
+  }
 
   await notifyCustomer({
     customerId: room.customer._id,

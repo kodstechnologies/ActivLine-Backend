@@ -11,12 +11,7 @@ import Location from "../../models/Customer/customerLocation.mode.js";
 import { notifyCustomer } from "../Notification/customer.notification.service.js";
 
 export const createRelocationService = async (user, payload) => {
-  const customer = await Customer.findOne({
-    $or: [
-      { _id: user?._id },
-      { activlineUserId: user?.activlineUserId },
-    ].filter(Boolean),
-  });
+  const customer = await Customer.findById(user._id);
 
   if (!customer) {
     throw new ApiError(404, "Customer profile not found");
@@ -36,12 +31,11 @@ export const createRelocationService = async (user, payload) => {
   } = payload;
 
   const existingRelocation = await relocationRepo.findOneRelocationRepo({
-    userId: customer._id,
-    // status: { $in: ["PENDING", "REQUEST"] },
+    userId: user._id,
   });
 
   const relocationData = {
-    userId: customer._id,
+    userId: user._id,
     accountId,
     userGroupId,
     installation_address_line2,
@@ -151,39 +145,11 @@ export const getRelocationsService = async (user, filters) => {
 
 export const updateRelocationService = async (user, relocationId, payload) => {
   const request = await relocationRepo.findRelocationById(relocationId);
+
   if (!request) {
     throw new ApiError(404, "Relocation request not found");
   }
-
   const updates = { ...payload };
-
-  if (user?.role === "CUSTOMER") {
-    const customer = await Customer.findOne({
-      $or: [
-        { _id: user?._id },
-        { activlineUserId: user?.activlineUserId },
-      ].filter(Boolean),
-    });
-    if (!customer || String(request.userId) !== String(customer._id)) {
-      throw new ApiError(403, "Access denied. You do not own this request.");
-    }
-
-    if (request.status !== "REQUEST") {
-      throw new ApiError(
-        400,
-        "Cannot edit request details once process has started",
-      );
-    }
-
-    delete updates.status;
-  } else if (user?.role === "FRANCHISE_ADMIN") {
-    if (String(request.accountId) !== String(user.accountId)) {
-      throw new ApiError(
-        403,
-        "Access denied. Request belongs to another franchise.",
-      );
-    }
-  }
 
   if (updates.sifted_date) updates.sifted_date = new Date(updates.sifted_date);
   if (updates.longitude) updates.longitude = Number(updates.longitude);
@@ -193,10 +159,11 @@ export const updateRelocationService = async (user, relocationId, payload) => {
     relocationId,
     updates,
   );
+  const customer = await Customer.findById(request.userId);
 
   // Apply condition: when status is updated to "COMPLETED" (and it was not already COMPLETED)
   if (updates.status === "COMPLETED" && request.status !== "COMPLETED") {
-    const customer = await Customer.findById(request.userId);
+    // const customer = await Customer.findById(request.userId);
     if (customer) {
       // 1. Update customer local address in MongoDB
       customer.installationAddress = {
@@ -250,9 +217,6 @@ export const updateRelocationService = async (user, relocationId, payload) => {
               latitude: Number(request.latitude),
             },
           });
-          console.log(
-            `[Location] Successfully updated coordinates for customer ${customer.emailId}`,
-          );
         } catch (locError) {
           console.error(
             "Failed to update customer Location coordinates on relocation complete:",
@@ -265,85 +229,79 @@ export const updateRelocationService = async (user, relocationId, payload) => {
 
   // SMS & App Notification trigger for status changes to PENDING or COMPLETED
 
-  if (
-    (updates.status === "PENDING" && request.status !== "PENDING") ||
-    (updates.status === "COMPLETED" && request.status !== "COMPLETED")
-  ) {
-    const customer = await Customer.findById(request.userId);
-    console.log("customer data", customer?._id);
-    if (customer) {
-      const addressStr =
-        `${request.installation_address_line2 || ""}, ${request.installation_address_city || ""}`
-          .trim()
-          .replace(/^,\s*/, "");
+  // if (
+  //   (updates.status === "PENDING" && request.status !== "PENDING") ||
+  //   (updates.status === "COMPLETED" && request.status !== "COMPLETED")
+  // ) {
+  // const customer = await Customer.findById(request.userId);
 
-      // 1. Send SMS Notification
-      if (customer.phoneNumber) {
-        try {
-          let smsData = null;
-          if (updates.status === "PENDING") {
-            smsData = SMS_TEMPLATE_ID.RELOCATION_PENDING(
-              customer.userName || customer.firstName || "Customer",
-            );
-          } else if (updates.status === "COMPLETED") {
-            smsData = SMS_TEMPLATE_ID.RELOCATION_COMPLETED(
-              customer.userName || customer.firstName || "Customer",
-              addressStr,
-            );
-          }
+  if (customer) {
+    const addressStr =
+      `${request.installation_address_line2 || ""}, ${request.installation_address_city || ""}`
+        .trim()
+        .replace(/^,\s*/, "");
 
-          if (smsData && smsData.ID) {
-            await sendMessage({
-              mobile: customer.phoneNumber,
-              message: smsData.MESSAGE,
-              template_id: smsData.ID,
-            });
-          }
-          console.log(
-            `[SMS] Sent relocation status update SMS to ${customer.phoneNumber} for status ${updates.status}`,
-          );
-        } catch (smsErr) {
-          console.error(
-            `[SMS] Failed to send relocation status SMS:`,
-            smsErr.message,
-          );
-        }
-      }
-
-      // 2. Send Push & In-App Notification (Database + Firebase)
+    // 1. Send SMS Notification
+    if (customer.phoneNumber) {
       try {
-        let notificationTitle = "";
-        let notificationMessage = "";
-
+        let smsData = null;
         if (updates.status === "PENDING") {
-          notificationTitle = "Relocation Request Approved";
-          notificationMessage = `Dear ${customer.userName || customer.firstName || "Customer"}, your relocation request is pending approval.`;
+          smsData = SMS_TEMPLATE_ID.RELOCATION_PENDING(
+            customer.userName || customer.firstName || "Customer",
+          );
         } else if (updates.status === "COMPLETED") {
-          notificationTitle = "Relocation Completed";
-          notificationMessage = `Dear ${customer.userName || customer.firstName || "Customer"}, your relocation request to ${addressStr} has been completed successfully.`;
+          smsData = SMS_TEMPLATE_ID.RELOCATION_COMPLETED(
+            customer.userName || customer.firstName || "Customer",
+            addressStr,
+          );
         }
 
-        await notifyCustomer({
-          customerId: customer._id,
-          title: notificationTitle,
-          message: notificationMessage,
-          type: "SYSTEM",
-          data: {
-            relocationId: request._id.toString(),
-            status: updates.status,
-          },
-        });
-        console.log(
-          `[Notification] Sent relocation in-app/push notification to customer ${customer._id} for status ${updates.status}`,
-        );
-      } catch (notifErr) {
+        if (smsData && smsData.ID) {
+          await sendMessage({
+            mobile: customer.phoneNumber,
+            message: smsData.MESSAGE,
+            template_id: smsData.ID,
+          });
+        }
+      } catch (smsErr) {
         console.error(
-          `[Notification] Failed to send relocation push/in-app notification:`,
-          notifErr.message,
+          `[SMS] Failed to send relocation status SMS:`,
+          smsErr.message,
         );
       }
     }
+
+    // 2. Send Push & In-App Notification (Database + Firebase)
+    try {
+      let notificationTitle = "";
+      let notificationMessage = "";
+
+      if (updates.status === "PENDING") {
+        notificationTitle = "Relocation Request Approved";
+        notificationMessage = `Dear ${customer.userName || customer.firstName || "Customer"}, your relocation request is pending approval.`;
+      } else if (updates.status === "COMPLETED") {
+        notificationTitle = "Relocation Completed";
+        notificationMessage = `Dear ${customer.userName || customer.firstName || "Customer"}, your relocation request to ${addressStr} has been completed successfully.`;
+      }
+
+      await notifyCustomer({
+        customerId: request.userId,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: "SYSTEM",
+        data: {
+          relocationId: request._id.toString(),
+          status: updates.status,
+        },
+      });
+    } catch (notifErr) {
+      console.error(
+        `[Notification] Failed to send relocation push/in-app notification:`,
+        notifErr.message,
+      );
+    }
   }
+  // }
 
   return updatedRelocation;
 };
@@ -367,19 +325,8 @@ export const deleteRelocationService = async (user, relocationId) => {
 };
 
 export const getMyRelocationService = async (user) => {
-  const customer = await Customer.findOne({
-    $or: [
-      { _id: user?._id },
-      { activlineUserId: user?.activlineUserId },
-    ].filter(Boolean),
-  });
-
-  if (!customer) {
-    throw new ApiError(404, "Customer profile not found");
-  }
-
   return await relocationRepo.findLatestRelocationRepo({
-    userId: customer._id,
+    userId: user._id,
     status: { $in: ["PENDING"] },
   });
 };

@@ -29,10 +29,6 @@ export const updateRelocationRepo = async (id, updateData) => {
     { $set: updateData },
     { new: true, runValidators: true },
   );
-  // .populate(
-  //   "userId",
-  //   "userName phoneNumber emailId installationAddress address",
-  // );
 };
 
 export const deleteRelocationRepo = async (id) => {
