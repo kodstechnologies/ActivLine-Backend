@@ -7,7 +7,7 @@ import Franchise from "../../../models/Franchise/franchise.model.js";
 
 /* OPEN TICKETS */
 export const countOpenTickets = () =>
-  ChatRoom.countDocuments({ status: "OPEN" });
+  ChatRoom.countDocuments({ status: "OPEN", isConnectedToAgent: true });
 
 /* IN PROGRESS */
 export const countInProgressTickets = () =>
@@ -36,7 +36,7 @@ export const countDistinctCustomers = async () => {
 
 /* RECENT TICKETS */
 export const getRecentTickets = (limit = 5) =>
-  ChatRoom.find()
+  ChatRoom.find({ isConnectedToAgent: true })
     .populate("customer", "userName firstName lastName emailId email")
     .sort({ updatedAt: -1 })
     .limit(limit);
@@ -70,6 +70,7 @@ export const countRoomsAssignedToStaff = () =>
   ChatRoom.countDocuments({
     customer: { $ne: null },       // created by customer
     assignedStaff: { $ne: null },  // assigned by admin
+    status: { $in: ["ASSIGNED", "IN_PROGRESS"] },
   });
 
 const buildRevenueMatch = ({
@@ -297,12 +298,13 @@ export const countResolvedTickets = async ({ accountId, startDate, endDate }) =>
 };
 
 export const countOpenTicketCustomers = async ({ accountId }) => {
-  const match = { status: "OPEN" };
+  const match = { status: "OPEN", isConnectedToAgent: true };
 
   if (!accountId) {
     const ids = await ChatRoom.distinct("customer", {
       status: "OPEN",
       customer: { $ne: null },
+      isConnectedToAgent: true,
     });
     return ids.length;
   }
@@ -448,7 +450,7 @@ export const getLatestTicketsList = async ({
   limit = 5,
 } = {}) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
-  const pipeline = [];
+  const pipeline = [{ $match: { isConnectedToAgent: true } }];
 
   if (accountId) {
     const customersCollection = Customer.collection.name;

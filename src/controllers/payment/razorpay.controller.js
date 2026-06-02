@@ -887,6 +887,17 @@ export const verifyPlanPayment = async (req, res, next) => {
       ? mapPaymentHistoryDoc(updated, resolveCustomer(updated))
       : null;
 
+    if (responseData?.planEndDate && resolvedProfileId) {
+      const d = new Date(responseData.planEndDate);
+      if (!Number.isNaN(d.getTime())) {
+        const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        await Customer.findOneAndUpdate(
+          { activlineUserId: resolvedProfileId },
+          { $set: { expirationDate: formattedDate } }
+        );
+      }
+    }
+
     return res.status(200).json({
       success: true,
       status: "success",

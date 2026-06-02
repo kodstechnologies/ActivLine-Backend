@@ -1,11 +1,14 @@
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import { ApiResponse } from "../../utils/ApiReponse.js";
 import { ApiError } from "../../utils/ApiError.js";
-import { 
-  getActivlineUserDetails, 
-  editActivlineUserProfile, 
-  getCustomerProfile 
+import {
+  getActivlineUserDetails,
+  editActivlineUserProfile,
+  getCustomerProfile,
+  getMyReferralsService,
 } from "../../services/Customer/customerprofile.service.js";
+import Customer from "../../models/Customer/customer.model.js";
+import Referral from "../../models/Customer/referral.model.js";
 
 /**
  * Get profile for currently authenticated customer
@@ -32,9 +35,14 @@ export const getProfile = asyncHandler(async (req, res) => {
     };
   }
 
-  return res.status(200).json(
-    ApiResponse.success(customerData, "Customer profile fetched successfully")
-  );
+  return res
+    .status(200)
+    .json(
+      ApiResponse.success(
+        customerData,
+        "Customer profile fetched successfully",
+      ),
+    );
 });
 
 export const fetchUserFullDetails = asyncHandler(async (req, res) => {
@@ -51,11 +59,10 @@ export const fetchUserFullDetails = asyncHandler(async (req, res) => {
     message: "User full details fetched successfully",
     data: activlineData,
     meta: {
-      source: "activline"
-    }
+      source: "activline",
+    },
   });
 });
-
 
 export const editUserProfile = asyncHandler(async (req, res) => {
   const payload = req.body;
@@ -71,4 +78,21 @@ export const editUserProfile = asyncHandler(async (req, res) => {
     message: "User profile updated successfully",
     data: activlineResponse,
   });
+});
+
+/**
+ * Get referral summary for currently authenticated customer
+ */
+export const getMyReferrals = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "User ID not found in token");
+  }
+
+  const referralSummary = await getMyReferralsService(userId);
+
+  return res.status(200).json(
+    ApiResponse.success(referralSummary, "Referral summary fetched successfully")
+  );
 });

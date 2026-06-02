@@ -50,6 +50,7 @@ export const createFranchiseChatRoom = asyncHandler(async (req, res) => {
     createdByAdmin: req.user._id,
     assignedFranchiseAdmin: req.user._id,
     status: "OPEN",
+    isConnectedToAgent: true,
   });
 
   if (message && String(message).trim()) {
@@ -96,7 +97,7 @@ export const getFranchiseChatRooms = asyncHandler(async (req, res) => {
   const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
   const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
 
-  const match = {};
+  const match = { isConnectedToAgent: true };
   if (status && ALLOWED_STATUSES.includes(status)) {
     match.status = status;
   }

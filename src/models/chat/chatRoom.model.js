@@ -42,6 +42,11 @@ lastMessageAt: {
     default: null,
   },
 
+  isConnectedToAgent: {
+    type: Boolean,
+    default: false,
+  },
+
   },
   { timestamps: true }
 );

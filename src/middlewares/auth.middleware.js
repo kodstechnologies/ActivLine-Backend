@@ -41,7 +41,6 @@ export const verifyJWT = asyncHandler(async (req, _res, next) => {
       if (res?.cookie) {
         res.cookie("accessToken", refreshed.accessToken, cookieOptions);
       }
-
       req.user = {
         _id: refreshed.user._id,
         role: (refreshed.user.role || "CUSTOMER").toUpperCase(),
@@ -72,7 +71,10 @@ export const verifyJWT = asyncHandler(async (req, _res, next) => {
       if (res?.cookie) {
         res.cookie("accessToken", refreshed.accessToken, cookieOptions);
       }
-
+      console.log(
+        "Token refreshed via cookie in verifyJWT middleware",
+        refreshed.user,
+      );
       req.user = {
         _id: refreshed.user._id,
         role: (refreshed.user.role || "CUSTOMER").toUpperCase(),
@@ -101,7 +103,6 @@ export const verifyJWT = asyncHandler(async (req, _res, next) => {
 
   next();
 });
-
 
 // export const verifyJWT = asyncHandler(async (req, _res, next) => {
 //   let token = null;
@@ -157,7 +158,6 @@ export const adminAuth = asyncHandler(async (req, _res, next) => {
 
   next();
 });
-
 
 export const isSuperAdmin = asyncHandler((req, _, next) => {
   if (!req.user || !req.user.role) {
@@ -217,7 +217,6 @@ export const blockTerminatedStaff = async (req, _, next) => {
   next();
 };
 
-
 export const verifyAccessToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
@@ -231,10 +230,7 @@ export const verifyAccessToken = (req, res, next) => {
   const token = authHeader.split(" ")[1];
 
   try {
-    const decoded = jwt.verify(
-      token,
-      process.env.ACCESS_TOKEN_SECRET
-    );
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
 
     // attach user to request
     req.user = decoded;
@@ -281,10 +277,6 @@ export const verifyCustomerJWT = asyncHandler(async (req, _, next) => {
   next();
 });
 
-
-
-
-
 // export const optionalCustomerAuth = (req, _, next) => {
 //   const token =
 //     req.cookies?.accessToken ||
@@ -305,10 +297,7 @@ export const auth = (...allowedRoles) => {
   return asyncHandler(async (req, _res, next) => {
     await verifyJWT(req, _res, () => {});
 
-    if (
-      allowedRoles.length &&
-      !allowedRoles.includes(req.user.role)
-    ) {
+    if (allowedRoles.length && !allowedRoles.includes(req.user.role)) {
       throw new ApiError(403, "Access denied");
     }
 
@@ -316,33 +305,26 @@ export const auth = (...allowedRoles) => {
   });
 };
 
+export const verifyFranchiseAdmin = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
 
-export const verifyFranchiseAdmin = (req,res,next)=>{
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "No token provided",
+      });
+    }
 
- try{
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
- const token = req.headers.authorization?.split(" ")[1];
+    req.admin = decoded;
 
- if(!token){
-   return res.status(401).json({
-     success:false,
-     message:"No token provided"
-   });
- }
-
- const decoded = jwt.verify(token,process.env.JWT_SECRET);
-
- req.admin = decoded;
-
- next();
-
- }catch(error){
-
- res.status(401).json({
-   success:false,
-   message:"Invalid token"
- });
-
- }
-
+    next();
+  } catch (error) {
+    res.status(401).json({
+      success: false,
+      message: "Invalid token",
+    });
+  }
 };

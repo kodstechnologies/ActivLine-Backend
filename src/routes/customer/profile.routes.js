@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { 
-  fetchUserFullDetails, 
-  getProfile 
+import {
+  fetchUserFullDetails,
+  getProfile,
+  getMyReferrals,
 } from "../../controllers/Customer/customerprofile.controller.js";
 import {
   editUserProfile,
@@ -18,6 +19,11 @@ const router = Router();
 router.get("/", verifyJWT, allowRoles("CUSTOMER"), getProfile);
 
 /**
+ * GET /api/customer/profile/referrals
+ */
+router.get("/referrals", verifyJWT, allowRoles("CUSTOMER"), getMyReferrals);
+
+/**
  * GET /api/customer/profile/user/:user_id
  */
 router.get("/user/:user_id", fetchUserFullDetails);
@@ -30,6 +36,11 @@ router.post("/edit", verifyJWT, allowRoles("CUSTOMER"), editUserProfile);
 /**
  * POST /api/customer/profile/verify-update
  */
-router.post("/verify-update", verifyJWT, allowRoles("CUSTOMER"), verifyOtpAndUpdate);
+router.post(
+  "/verify-update",
+  verifyJWT,
+  allowRoles("CUSTOMER"),
+  verifyOtpAndUpdate,
+);
 
 export default router;

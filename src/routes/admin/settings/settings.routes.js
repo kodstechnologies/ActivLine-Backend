@@ -7,6 +7,8 @@ import {
   updateBanner,
   toggleBanner,
   deleteBanner,
+  createReferalMessage,
+  getReferalMessage,
 } from "../../../controllers/Admin/settings/generalSettings.controller.js";
 
 import { verifyJWT } from "../../../middlewares/auth.middleware.js";
@@ -24,13 +26,8 @@ const router = Router();
 router.get(
   "/general",
   verifyJWT,
-  allowRoles(
-    ROLES.SUPER_ADMIN,
-    ROLES.ADMIN,
-    ROLES.ADMIN_STAFF,
-    ROLES.CUSTOMER
-  ),
-  getGeneralSettings
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_STAFF, ROLES.CUSTOMER),
+  getGeneralSettings,
 );
 
 /**
@@ -40,7 +37,7 @@ router.put(
   "/general",
   verifyJWT,
   allowRoles(ROLES.SUPER_ADMIN),
-  updateGeneralSettings
+  updateGeneralSettings,
 );
 
 // ── Banner Routes ─────────────────────────────────────────────────────────────
@@ -51,13 +48,8 @@ router.put(
 router.get(
   "/banner",
   verifyJWT,
-  allowRoles(
-    ROLES.SUPER_ADMIN,
-    ROLES.ADMIN,
-    ROLES.ADMIN_STAFF,
-    ROLES.CUSTOMER
-  ),
-  getAllBanners
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_STAFF, ROLES.CUSTOMER),
+  getAllBanners,
 );
 
 /**
@@ -67,9 +59,9 @@ router.get(
 router.post(
   "/banner/create",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN,ROLES.ADMIN,),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   upload.single("file"),
-  createBanner
+  createBanner,
 );
 
 /**
@@ -79,9 +71,9 @@ router.post(
 router.put(
   "/banner/:bannerId",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN,  ROLES.ADMIN,),
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
   upload.single("file"),
-  updateBanner
+  updateBanner,
 );
 
 /**
@@ -90,8 +82,8 @@ router.put(
 router.patch(
   "/banner/:bannerId/toggle",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN,  ROLES.ADMIN,),
-  toggleBanner
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  toggleBanner,
 );
 
 /**
@@ -100,8 +92,22 @@ router.patch(
 router.delete(
   "/banner/:bannerId",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN,  ROLES.ADMIN,),
-  deleteBanner
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  deleteBanner,
 );
 
+// referal message
+router.get(
+  "/referal-message",
+  verifyJWT,
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.ADMIN_STAFF, ROLES.CUSTOMER),
+  getReferalMessage,
+);
+
+router.post(
+  "/referal-message",
+  verifyJWT,
+  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  createReferalMessage,
+);
 export default router;

@@ -20,9 +20,11 @@ import {
   updateLocation,
   getLocation,
 } from "../../controllers/Customer/customer.controller.js";
+import { getPlanUsageHistory } from "../../controllers/Customer/dailyDataUsage.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
+import { getTariffByFranchiseId } from "../../controllers/Admin/settings/franchiseTariff.controller.js";
 
 const router = Router();
 
@@ -194,8 +196,18 @@ router.delete(
 );
 // getLocation
 // update customer location
-router.post("/user/location/update", updateLocation);
+router.post(
+  "/location/update",
+  // verifyJWT,
+  // allowRoles("CUSTOMER"),
+  updateLocation,
+);
 // user current location
-router.get("/user/location", getLocation);
+router.get("/location", verifyJWT, allowRoles("CUSTOMER"), getLocation);
 
+// tarrif route
+router.get("/tariff/:franchiseId", getTariffByFranchiseId);
 export default router;
+
+// data use
+router.get("/plan/usage-history", verifyJWT, getPlanUsageHistory);

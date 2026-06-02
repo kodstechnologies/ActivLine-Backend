@@ -1,6 +1,10 @@
 import activlineClient from "../../external/activline/activline.client.js";
 import FormData from "form-data";
 import { findById } from "../../repositories/Customer/customer.repository.js";
+import {
+  findReferralsByReferrer,
+  referralMessage,
+} from "../../repositories/Customer/referral.repository.js";
 
 import activlineFormClient from "../../external/activline/activline.client.js";
 import Location from "../../models/Customer/customerLocation.mode.js";
@@ -101,10 +105,10 @@ export const updateUserInActivline = async (payload) => {
 
 // update location
 export const updateLocationService = async (payload) => {
-  const { userId, location } = payload;
+  const { email, location } = payload;
 
   return await Location.findOneAndUpdate(
-    { userId },
+    { email },
     {
       $set: { location },
     },
@@ -113,4 +117,44 @@ export const updateLocationService = async (payload) => {
       upsert: true,
     },
   );
+};
+
+/**
+ * Get referral summary details for customer
+ */
+export const getMyReferralsService = async (userId) => {
+  const customer = await getCustomerProfile(userId);
+
+  const referralRecords = await findReferralsByReferrer(userId);
+  const referralMsg = await referralMessage();
+  console.log("Referral Records:", referralMsg);
+  const referrals = referralRecords
+    .map((r) => {
+      if (!r.referee) return null;
+      return {
+        _id: r.referee._id,
+        userName: r.referee.userName,
+        firstName: r.referee.firstName,
+        lastName: r.referee.lastName,
+        createdAt: r.referredAt,
+        referralCompleted: r.referralCompleted,
+      };
+    })
+    .filter(Boolean);
+
+  const referralSummary = {
+    referralMessage: referralMsg?.message || "Invite friends and earn rewards!",
+    code: customer.referral?.code || null,
+    totalRegistered: referrals.length,
+    totalFreePlansEarned: referrals.filter((r) => r.referralCompleted).length,
+    history: referrals.map((r) => ({
+      name: `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.userName,
+      dateJoined: r.createdAt,
+      // status: r.referralCompleted
+      //   ? "Earned 1 Month Free"
+      //   : "Pending Plan Purchase",
+    })),
+  };
+
+  return referralSummary;
 };

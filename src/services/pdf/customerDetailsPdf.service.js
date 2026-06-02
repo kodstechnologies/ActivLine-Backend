@@ -1,5 +1,8 @@
 import puppeteer from "puppeteer";
-import { generateCustomerDetailsHTML } from "../../utils/customerDetailsTemplate.js";
+import {
+  generateCustomerCAFHTML,
+  generateCustomerDetailsHTML,
+} from "../../utils/customerDetailsTemplate.js";
 
 let browserPromise = null;
 
@@ -42,5 +45,6 @@ export const renderCustomerDetailsPdf = async (htmlContent) => {
     await page.close().catch(() => {});
   }
 };
-
-export const buildCustomerDetailsHtml = (payload) => generateCustomerDetailsHTML(payload);
+export const buildCustomerDetailsHtml = (payload) =>
+  generateCustomerCAFHTML(payload);
+// export const buildCustomerDetailsHtml = (payload) => generateCustomerDetailsHTML(payload);

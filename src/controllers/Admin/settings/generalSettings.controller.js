@@ -1,6 +1,7 @@
 // controllers/generalSettings.controller.js
 import { asyncHandler } from "../../../utils/AsyncHandler.js";
 import ApiResponse from "../../../utils/ApiReponse.js";
+import { ApiError } from "../../../utils/ApiError.js";
 import {
   getGeneralSettingsService,
   updateGeneralSettingsService,
@@ -12,15 +13,19 @@ import {
 } from "../../../services/admin/settings/generalSettings.service.js";
 import { validateGeneralSettings } from "../../../validations/admin/settings/generalSettings.validation.js";
 import { validateBannerFile } from "../../../validations/admin/settings/banner.validation.js";
+import referalMessage from "../../../models/admin/Settings/referalMessage.js";
+import { createActivityLog } from "../../../services/ActivityLog/activityLog.service.js";
 
 // ── General Settings ──────────────────────────────────────────────────────────
 
 export const getGeneralSettings = asyncHandler(async (req, res) => {
   const settings = await getGeneralSettingsService();
 
-  res.status(200).json(
-    ApiResponse.success(settings, "General settings fetched successfully")
-  );
+  res
+    .status(200)
+    .json(
+      ApiResponse.success(settings, "General settings fetched successfully"),
+    );
 });
 
 export const updateGeneralSettings = asyncHandler(async (req, res) => {
@@ -28,9 +33,11 @@ export const updateGeneralSettings = asyncHandler(async (req, res) => {
 
   const settings = await updateGeneralSettingsService(req.body, req.user._id);
 
-  res.status(200).json(
-    ApiResponse.success(settings, "General settings updated successfully")
-  );
+  res
+    .status(200)
+    .json(
+      ApiResponse.success(settings, "General settings updated successfully"),
+    );
 });
 
 // ── Banners ───────────────────────────────────────────────────────────────────
@@ -40,7 +47,9 @@ export const updateGeneralSettings = asyncHandler(async (req, res) => {
  */
 export const getAllBanners = asyncHandler(async (req, res) => {
   const data = await getAllBannersService();
-  res.status(200).json(ApiResponse.success(data, "Banners fetched successfully"));
+  res
+    .status(200)
+    .json(ApiResponse.success(data, "Banners fetched successfully"));
 });
 
 /**
@@ -51,7 +60,9 @@ export const createBanner = asyncHandler(async (req, res) => {
 
   const banner = await createBannerService(req.file);
 
-  res.status(201).json(ApiResponse.success(banner, "Banner added successfully"));
+  res
+    .status(201)
+    .json(ApiResponse.success(banner, "Banner added successfully"));
 });
 
 /**
@@ -63,7 +74,9 @@ export const updateBanner = asyncHandler(async (req, res) => {
 
   const banner = await updateBannerService(bannerId, req.file);
 
-  res.status(200).json(ApiResponse.success(banner, "Banner updated successfully"));
+  res
+    .status(200)
+    .json(ApiResponse.success(banner, "Banner updated successfully"));
 });
 
 /**
@@ -74,9 +87,14 @@ export const toggleBanner = asyncHandler(async (req, res) => {
 
   const banner = await toggleBannerService(bannerId);
 
-  res.status(200).json(
-    ApiResponse.success(banner, `Banner ${banner.isActive ? "activated" : "deactivated"} successfully`)
-  );
+  res
+    .status(200)
+    .json(
+      ApiResponse.success(
+        banner,
+        `Banner ${banner.isActive ? "activated" : "deactivated"} successfully`,
+      ),
+    );
 });
 
 /**
@@ -87,5 +105,44 @@ export const deleteBanner = asyncHandler(async (req, res) => {
 
   const result = await deleteBannerService(bannerId);
 
-  res.status(200).json(ApiResponse.success(result, "Banner deleted successfully"));
+  res
+    .status(200)
+    .json(ApiResponse.success(result, "Banner deleted successfully"));
+});
+
+// create referal message
+
+export const createReferalMessage = asyncHandler(async (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    throw new ApiError(400, "Message is required");
+  }
+  
+  const result = await referalMessage.findOneAndUpdate(
+    {}, 
+    { $set: { message } },
+    { upsert: true, new: true }
+  );
+
+  await createActivityLog({
+    req,
+    action: "UPDATE",
+    module: "REFERRAL",
+    description: `Updated referral invitation message to: "${message}"`,
+    targetId: String(result._id),
+    metadata: {
+      message
+    }
+  });
+
+  res
+    .status(200)
+    .json(ApiResponse.success(result, "Referal message saved successfully"));
+});
+
+export const getReferalMessage = asyncHandler(async (req, res) => {
+  const result = await referalMessage.findOne().sort({ createdAt: -1 });
+  res
+    .status(200)
+    .json(ApiResponse.success(result, "Referal message fetched successfully"));
 });

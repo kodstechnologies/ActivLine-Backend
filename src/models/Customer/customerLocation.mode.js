@@ -2,9 +2,8 @@ import mongoose from "mongoose";
 
 const customerLocation = mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer",
+    email: {
+      type: String,
       require: true,
     },
     location: {

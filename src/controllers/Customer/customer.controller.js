@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Customer from "../../models/Customer/customer.model.js";
+import Referral from "../../models/Customer/referral.model.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import { createCustomerSchema } from "../../validations/Customer/customer.validation.js";
 import {
@@ -20,6 +21,8 @@ import { notifyAdmins } from "../../services/Notification/admin.notification.ser
 import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 import { updateLocationService } from "../../services/Customer/customerprofile.service.js";
 import Location from "../../models/Customer/customerLocation.mode.js";
+import { sendMessage } from "../../utils/sendMessage.js";
+import { handleReferralFlow } from "../../services/Customer/referral.service.js";
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -294,6 +297,35 @@ export const createCustomer = asyncHandler(async (req, res) => {
         );
       }
 
+      if (value.phoneNumber) {
+        tasks.push(
+          (async () => {
+            try {
+              const { ID, MESSAGE } = SMS_TEMPLATE_ID.GRANT_ACCESS(
+                value._id,
+                result.credentials.password,
+                new Date().toLocaleDateString(),
+                "N/A",
+              );
+
+              await sendMessage({
+                mobile: value.phoneNumber,
+                message: MESSAGE,
+                template_id: ID,
+              });
+              console.log(
+                `[SMS] Welcome SMS successfully sent to ${value.phoneNumber}`,
+              );
+            } catch (smsErr) {
+              console.error(
+                `[SMS] Failed to send welcome SMS:`,
+                smsErr.message,
+              );
+            }
+          })(),
+        );
+      }
+
       tasks.push(
         createActivityLog({
           req,
@@ -343,6 +375,21 @@ export const createCustomer = asyncHandler(async (req, res) => {
             result.customer?.activlineUserId || null,
             req.files,
           ),
+        );
+      }
+
+      if (result.customer) {
+        tasks.push(
+          (async () => {
+            try {
+              await handleReferralFlow(result.customer);
+            } catch (refErr) {
+              console.error(
+                "[REFERRAL] Registration processing failed:",
+                refErr.message,
+              );
+            }
+          })(),
         );
       }
 
@@ -451,10 +498,81 @@ export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
     }
   });
 
+  // Fetch referrer details if available from the separate schema
+  let referrerDetails = null;
+  try {
+    const referralRecord = await Referral.findOne({ referee: customer._id })
+      .populate("referrer", "userName firstName lastName emailId phoneNumber")
+      .lean();
+    if (referralRecord?.referrer) {
+      referrerDetails = referralRecord.referrer;
+    }
+  } catch (refErr) {
+    console.error(
+      "Failed to load referrer details in overview:",
+      refErr.message,
+    );
+  }
+
+  // Fetch referrals made by this customer from the separate schema
+  let referralsMade = [];
+  try {
+    const referralRecords = await Referral.find({ referrer: customer._id })
+      .populate(
+        "referee",
+        "userName firstName lastName emailId phoneNumber status createdAt",
+      )
+      .lean();
+
+    referralsMade = referralRecords
+      .map((r) => {
+        if (!r.referee) return null;
+        return {
+          _id: r.referee._id,
+          userName: r.referee.userName,
+          firstName: r.referee.firstName,
+          lastName: r.referee.lastName,
+          emailId: r.referee.emailId,
+          phoneNumber: r.referee.phoneNumber,
+          status: r.referee.status,
+          referralCompleted: r.referralCompleted,
+          createdAt: r.referredAt,
+        };
+      })
+      .filter(Boolean);
+  } catch (refErr) {
+    console.error("Failed to load referrals made in overview:", refErr.message);
+  }
+
+  const referralTracking = {
+    referredBy: referrerDetails
+      ? {
+          _id: referrerDetails._id,
+          userName: referrerDetails.userName,
+          name:
+            `${referrerDetails.firstName || ""} ${referrerDetails.lastName || ""}`.trim() ||
+            referrerDetails.userName,
+          emailId: referrerDetails.emailId,
+          phoneNumber: referrerDetails.phoneNumber,
+        }
+      : null,
+    referralsMade: referralsMade.map((r) => ({
+      _id: r._id,
+      userName: r.userName,
+      name: `${r.firstName || ""} ${r.lastName || ""}`.trim() || r.userName,
+      emailId: r.emailId,
+      phoneNumber: r.phoneNumber,
+      status: r.status,
+      rewardGranted: r.referralCompleted,
+      dateJoined: r.createdAt,
+    })),
+  };
+
   return res.json(
     ApiResponse.success(
       {
         customer,
+        referralTracking,
         paymentHistory: {
           page: Math.max(paymentPage, 1),
           limit: Math.max(paymentLimit, 1),
@@ -1122,24 +1240,26 @@ export const deleteMyProfileImage = asyncHandler(async (req, res) => {
 // update customer location
 
 export const updateLocation = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
-  const { longitude, latitude } = req.body;
-  if (!userId || !latitude || !longitude) {
+  const { longitude, latitude, email } = req.body;
+  if (!email || !latitude || !longitude) {
     throw new ApiError(401, "all fields are required");
   }
-  await updateLocationService({ userId, location: { longitude, latitude } });
+  const loc = await updateLocationService({
+    email,
+    location: { longitude, latitude },
+  });
   return res
     .status(200)
-    .json(ApiResponse.success(null, "location update successfully"));
+    .json(ApiResponse.success(loc, "location update successfully"));
 });
 
 export const getLocation = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) {
-    throw new ApiError(401, "User ID not found in token");
+  const email = req.user?.email || req.body?.email;
+  if (!email) {
+    throw new ApiError(401, "Email not found in request context");
   }
-  const locationData = Location.findOne({ userId });
+  const locationData = await Location.findOne({ email });
   return res
     .status(200)
-    .json(ApiResponse.success(locationData, "location update successfully"));
+    .json(ApiResponse.success(locationData, "Fetch successfully"));
 });
