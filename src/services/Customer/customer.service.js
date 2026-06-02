@@ -300,14 +300,18 @@ export const createCustomerService = async (payload, files) => {
   const cleanPayload = { ...payload };
   delete cleanPayload.password;
 
+  const customerReferralCode =
+    ownReferralCode ||
+    activlineData?.message?.UserSetting?.referral_code;
+
+  const referralData = {};
+  if (customerReferralCode) {
+    referralData.code = customerReferralCode;
+  }
+
   const savedCustomer = await createCustomerRepo({
     // Customer own refer code
-    referral: {
-      code:
-        ownReferralCode ||
-        activlineData?.message?.UserSetting?.referral_code ||
-        null,
-    },
+    referral: referralData,
     /* ===============================   
      🔹 CORE DETAILS
   =============================== */
