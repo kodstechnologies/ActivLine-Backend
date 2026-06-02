@@ -27,7 +27,7 @@ export const initSocket = (server) => {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
-    "http://15.206.235.221"
+    "https://admin.activline.co.in"
   ];
 
   if (process.env.CORS_ORIGIN) {
@@ -43,7 +43,7 @@ io = new Server(server, {
       if (
         allowedOrigins.includes(origin) ||
         origin.startsWith("http://localhost") ||
-        origin.startsWith("http://127.0.0.1")
+        origin.startsWith("https://admin.activline.co.in")
       ) {
         return callback(null, true);
       }
