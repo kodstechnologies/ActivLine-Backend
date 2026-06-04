@@ -35,7 +35,7 @@ export const initSocket = (server) => {
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
-    "http://15.206.235.221",
+    "https://admin.activline.co.in",
   ];
 
   if (process.env.CORS_ORIGIN) {
@@ -43,7 +43,6 @@ export const initSocket = (server) => {
       ...process.env.CORS_ORIGIN.split(",").map((o) => o.trim()),
     );
   }
-
   io = new Server(server, {
     cors: {
       origin: (origin, callback) => {
@@ -59,6 +58,7 @@ export const initSocket = (server) => {
       },
       methods: ["GET", "POST"],
       credentials: true,
+
     },
     transports: ["websocket"],
     maxHttpBufferSize: 20 * 1024 * 1024, // 🔥 20MB REQUIRED

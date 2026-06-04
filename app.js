@@ -15,7 +15,6 @@ const allowedOrigins = [
   "http://127.0.0.1:64255",
   "http://localhost:8000",
   "https://admin.activline.co.in",
-  "http://15.206.235.221",
 ];
 // console.log("allowedOrigins",allowedOrigins);
 app.use(
