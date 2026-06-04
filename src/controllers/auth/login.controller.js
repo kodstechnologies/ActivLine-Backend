@@ -4,7 +4,7 @@ import ApiError from "../../utils/ApiError.js";
 import { loginUser } from "../../services/auth/login.service.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 
-export const    login = asyncHandler(async (req, res) => {
+export const login = asyncHandler(async (req, res) => {
   let { email, password, fcmToken, deviceId } = req.body;
 
   if (!email || !password) {
@@ -22,13 +22,12 @@ export const    login = asyncHandler(async (req, res) => {
   }
 
   const result = await loginUser({ email, password, fcmToken, deviceId });
-
   await createActivityLog({
     req,
     user: { _id: result.user.id, role: result.user.role },
     action: "LOGIN",
     module: "AUTH",
-    description: `${result.user.role} ${result.user.name} logged in successfully from account ${result.user.accountId}`,
+    description: `${result.user.role} ${result.user.name} logged in successfully from account ${result.user.accountId || result.user.role}`,
   });
 
   const options = {

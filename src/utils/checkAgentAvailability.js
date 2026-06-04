@@ -43,12 +43,27 @@ const sendSupportMessage = async (io, roomId, newMessage) => {
   }, 5000);
 };
 
+const getKolkataMinutes = () => {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  });
+  
+  const parts = formatter.formatToParts(now);
+  const hour = parseInt(parts.find((p) => p.type === "hour").value, 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute").value, 10);
+  
+  return hour * 60 + minute;
+};
+
 export const checkAgentAvailability = async (req, res, next) => {
   try {
     const io = getIO();
     const { roomId } = req.body;
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = getKolkataMinutes();
 
     let startMinutes = 9 * 60; // Default 9:00 AM (540 minutes)
     let endMinutes = 21 * 60; // Default 9:00 PM (1260 minutes)
@@ -98,6 +113,7 @@ export const checkAgentAvailability = async (req, res, next) => {
             roomId,
             `Agent is available between ${displayStart} to ${displayEnd}. Your request has been noted, agents will contact you soon shortly.`,
           );
+          next();
         }
       } catch (err) {
         // Ignore update error

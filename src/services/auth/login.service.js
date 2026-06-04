@@ -3,13 +3,7 @@ import Admin from "../../models/auth/auth.model.js";
 import FranchiseAdmin from "../../models/Franchise/franchiseAdmin.model.js";
 import StaffStatus from "../../models/staff/Staff.model.js";
 
-export const loginUser = async ({
-  email,
-  password,
-  fcmToken,
-  deviceId,
-}) => {
-
+export const loginUser = async ({ email, password, fcmToken, deviceId }) => {
   // 1️⃣ Try Admin / Staff login
   let user = await Admin.findOne({ email }).select("+password");
   let isFranchise = false;
@@ -28,7 +22,6 @@ export const loginUser = async ({
 
   // 3️⃣ STAFF STATUS CHECK (only for admin staff)
   if (!isFranchise && user.role === "ADMIN_STAFF") {
-
     const staffStatus = await StaffStatus.findOne({ staffId: user._id });
 
     if (!staffStatus) {
@@ -39,10 +32,7 @@ export const loginUser = async ({
       throw new ApiError(403, "Your account is disabled. Contact admin.");
     }
 
-    await StaffStatus.updateOne(
-      { staffId: user._id },
-      { status: "ACTIVE" }
-    );
+    await StaffStatus.updateOne({ staffId: user._id }, { status: "ACTIVE" });
   }
 
   // 🔑 TOKEN GENERATION
@@ -63,7 +53,7 @@ export const loginUser = async ({
     if (!user.fcmTokens) user.fcmTokens = [];
 
     const existingDevice = user.fcmTokens.find(
-      (d) => d.deviceId === resolvedDeviceId
+      (d) => d.deviceId === resolvedDeviceId,
     );
 
     if (existingDevice) {
@@ -79,12 +69,12 @@ export const loginUser = async ({
   }
 
   await user.save({ validateBeforeSave: false });
-
   const userObject = {
     id: user._id,
     name: user.name,
     email: user.email,
     role: user.role,
+    accountId: user.accountId,
     fcmTokens: user.fcmTokens || [],
   };
 

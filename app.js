@@ -9,104 +9,107 @@ import path from "path";
 const app = express();
 
 const allowedOrigins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:64255",
-    "http://localhost:8000",
-    "http://15.206.235.221"
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:64255",
+  "http://localhost:8000",
+  "https://admin.activline.co.in",
+  "http://15.206.235.221",
 ];
 // console.log("allowedOrigins",allowedOrigins);
 app.use(
-    cors({
-        origin: (origin, callback) => {
-            
-            if (!origin) return callback(null, true);
-            
-            if (allowedOrigins.includes(origin)) {
-                console.log("Origin:", origin); // 🔥 debug
-                return callback(null, true);
-            }
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
 
-            return callback(null, false); // ✅ DO NOT THROW ERROR
-        },
-        credentials: true,
-    })
+      if (allowedOrigins.includes(origin)) {
+        console.log("Origin:", origin); // 🔥 debug
+        return callback(null, true);
+      }
+
+      return callback(null, false); // ✅ DO NOT THROW ERROR
+    },
+    credentials: true,
+  }),
 );
-
 
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(cookieParser());
 app.use(
-    "/uploads/chat",
-    express.static(path.join(process.cwd(), "uploads/chat"))
+  "/uploads/chat",
+  express.static(path.join(process.cwd(), "uploads/chat")),
 );
 app.use("/", paymentRoutes);
 app.use("/api", routes);
 
 // Test Route
 app.get("/test", (req, res) => {
-
-    // Send it in the response
-    res.json({
-        success: true,
-        message: `Server is working!`,
-        timestamp: new Date().toISOString(),
-    });
+  // Send it in the response
+  res.json({
+    success: true,
+    message: `Server is working!`,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Basic Error Handler
 app.use((err, req, res, next) => {
-    console.error("❌ Server Error:", err);
+  console.error("❌ Server Error:", err);
 
-    // Handle multer file size errors
-    if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(413).json({
-            success: false,
-            message: "File too large. Maximum file size is 500MB",
-            data: null,
-        });
-    }
-
-    // Handle multer file type errors
-    if (err.message && (err.message.includes("video files") || err.message.includes("Only video files"))) {
-        return res.status(400).json({
-            success: false,
-            message: err.message,
-            data: null,
-        });
-    }
-
-    // Handle multer "Unexpected field" error (wrong field name)
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid field name. Use 'video' as the field name for file upload.",
-            data: null,
-        });
-    }
-
-    // If it's an instance of ApiError → use its structure
-    if (err instanceof ApiError) {
-        return res.status(err.statusCode).json(err.toJSON());
-    }
-
-    // ✅ Handle JWT errors globally (Expired/Invalid)
-    if (err.name === "TokenExpiredError" || err.name === "JsonWebTokenError") {
-        return res.status(401).json({
-            success: false,
-            message: "401 Invalid or expired access token",
-            data: null,
-        });
-    }
-
-    // Otherwise, fallback to generic
-    res.status(500).json({
-        success: false,
-        message: err.message || "Internal Server Error",
-        data: null,
+  // Handle multer file size errors
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({
+      success: false,
+      message: "File too large. Maximum file size is 500MB",
+      data: null,
     });
+  }
+
+  // Handle multer file type errors
+  if (
+    err.message &&
+    (err.message.includes("video files") ||
+      err.message.includes("Only video files"))
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: err.message,
+      data: null,
+    });
+  }
+
+  // Handle multer "Unexpected field" error (wrong field name)
+  if (err.code === "LIMIT_UNEXPECTED_FILE") {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Invalid field name. Use 'video' as the field name for file upload.",
+      data: null,
+    });
+  }
+
+  // If it's an instance of ApiError → use its structure
+  if (err instanceof ApiError) {
+    return res.status(err.statusCode).json(err.toJSON());
+  }
+
+  // ✅ Handle JWT errors globally (Expired/Invalid)
+  if (err.name === "TokenExpiredError" || err.name === "JsonWebTokenError") {
+    return res.status(401).json({
+      success: false,
+      message: "401 Invalid or expired access token",
+      data: null,
+    });
+  }
+
+  // Otherwise, fallback to generic
+  res.status(500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+    data: null,
+  });
 });
 
 export default app;
