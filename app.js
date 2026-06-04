@@ -8,16 +8,22 @@ import cookieParser from "cookie-parser";
 import path from "path";
 const app = express();
 
-const allowedOrigins = [
+const envOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+  : [];
 
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:64255",
-    "http://localhost:8000",
-    "https://admin.activline.co.in",
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:64255",
+  "http://localhost:8000",
+  "http://15.206.235.221",
+  "https://admin.activline.co.in",
+  "https://activline.co.in",
+  "https://www.activline.co.in",
+  ...envOrigins
 ];
-// console.log("allowedOrigins",allowedOrigins);
 app.use(
     cors({
         origin: (origin, callback) => {

@@ -3,6 +3,7 @@ import {
   getUserSessionDetailsRaw,
   getUserByPhoneRaw,
 } from "../../services/Customer/dashboar.services.js";
+import { getAllProfileIds } from "../../external/activline/activline.profile.api.js";
 
 export const getUserUsage = async (req, res, next) => {
   try {
@@ -115,6 +116,38 @@ export const getUserByPhoneDetails = async (req, res, next) => {
       .filter(Boolean);
 
     return res.status(200).json({ data: extracted });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAllProfileIdsController = async (req, res, next) => {
+  try {
+    const { visible } = req.params;
+    const profiles = await getAllProfileIds();
+    
+    let profileList = (profiles || []).map((p) => p?.Profile || p).filter(Boolean);
+
+    if (visible !== undefined) {
+      const isVisibleQuery = String(visible).trim().toLowerCase();
+      if (isVisibleQuery === "true" || isVisibleQuery === "1") {
+        profileList = profileList.filter((profile) => {
+          const deact = String(profile.deactivated || "").trim().toLowerCase();
+          return deact !== "true" && deact !== "1";
+        });
+      } else if (isVisibleQuery === "false" || isVisibleQuery === "0") {
+        profileList = profileList.filter((profile) => {
+          const deact = String(profile.deactivated || "").trim().toLowerCase();
+          return deact === "true" || deact === "1";
+        });
+      }
+    }
+
+    return res.status(200).json({
+      status: "success",
+      totalCount: profileList.length,
+      data: profileList,
+    });
   } catch (err) {
     next(err);
   }
