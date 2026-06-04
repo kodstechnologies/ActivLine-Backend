@@ -9,12 +9,13 @@ import path from "path";
 const app = express();
 
 const allowedOrigins = [
+<<<<<<<<< Temporary merge branch 1
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:64255",
     "http://localhost:8000",
-    "https://admin.activline.co.in"
+    "https://admin.activline.co.in",
 ];
 // console.log("allowedOrigins",allowedOrigins);
 app.use(
