@@ -1590,7 +1590,6 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
         message: "Customer not found",
       });
     }
-
     const baseQuery = buildCustomerOwnershipQuery(customer);
     if (!baseQuery) {
       return res.status(200).json({
@@ -1598,13 +1597,16 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
         data: null,
       });
     }
-
     const latestPayment = await PaymentHistory.findOne({
-      paidByCustomerId: customer._id,
+      $or: [
+        { paidByPhone: { $in: customer.phoneNumber } },
+        { paidByEmail: { $in: customer.emailId } },
+        { paidByCustomerId: { $in: [customer._id] } },
+        { paidByUserName: { $in: [customer.userName] } },
+      ],
     }).sort({
       createdAt: -1,
     });
-
     if (!latestPayment) {
       return res.status(200).json({
         success: true,
@@ -1613,6 +1615,7 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
     }
 
     const customerSnapshot = toCustomerSnapshot(customer);
+    
     const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
     const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
 
@@ -1684,7 +1687,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     };
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
-    // console.log(paymentData,paymentData?.plan?.details)
+   
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
