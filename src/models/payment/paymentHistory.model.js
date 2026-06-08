@@ -31,10 +31,20 @@ const paymentHistorySchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    platformfee: {
+      type: String,
+      default: "0",
+      trim: true,
+    },
     currency: {
       type: String,
       default: "INR",
       trim: true,
+    },
+    platformFee: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     status: {
       type: String,
@@ -94,7 +104,7 @@ const paymentHistorySchema = new mongoose.Schema(
       trim: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 paymentHistorySchema.index({ groupId: 1, createdAt: -1 });

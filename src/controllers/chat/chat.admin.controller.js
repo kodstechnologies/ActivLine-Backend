@@ -24,12 +24,14 @@ export const assignStaff = asyncHandler(async (req, res) => {
       staffId: req.body.staffId,
     },
   });
-    // 🔔 SEND STAFF NOTIFICATION
-  await notifyStaffOnTicketAssign({
-    staffId: req.body.staffId,
-    room,
-    assignedBy: req.user,
-  });
+  // 🔔 SEND STAFF NOTIFICATION
+  if (req.body.staffId) {
+    await notifyStaffOnTicketAssign({
+      staffId: req.body.staffId,
+      room,
+      assignedBy: req.user,
+    });
+  }
   res.json(ApiResponse.success(room, "Staff assigned successfully"));
 });
 

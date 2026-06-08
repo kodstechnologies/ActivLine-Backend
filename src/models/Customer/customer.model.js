@@ -248,16 +248,16 @@ const customerSchema = new mongoose.Schema(
         default: 0,
         min: 0,
       },
-      getRewards: {
-        type: String,
-        trim: true,
-        default: "1 Month FREE",
-      },
-      giveRewards: {
-        type: String,
-        trim: true,
-        default: "$500 off",
-      },
+      // getRewards: {
+      //   type: String,
+      //   trim: true,
+      //   default: "1 Month FREE",
+      // },
+      // giveRewards: {
+      //   type: String,
+      //   trim: true,
+      //   default: "$500 off",
+      // },
     },
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -16,12 +16,6 @@ export const createLeadService = async (payload) => {
     if (!referrer) {
       throw new ApiError(400, "Invalid referral code");
     }
-
-    // 🔹 2. Increase referral count
-    await Customer.updateOne(
-      { _id: referrer._id },
-      { $inc: { "referral.referredCount": 1 } }
-    );
   }
 
   // 🔹 3. Existing logic (UNCHANGED)

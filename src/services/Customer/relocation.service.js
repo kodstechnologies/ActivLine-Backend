@@ -97,6 +97,7 @@ export const getRelocationsService = async (user, filters) => {
     query,
     skip,
     Number(limit),
+    { createdAt: -1 },
   );
 
   // Convert Mongoose documents to plain objects so we can add dynamic properties
