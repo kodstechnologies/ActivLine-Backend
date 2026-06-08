@@ -77,6 +77,17 @@ export const createFranchiseChatRoom = asyncHandler(async (req, res) => {
     .populate("assignedStaff", "name email")
     .populate("assignedFranchiseAdmin", "name email accountId role status");
 
+  try {
+    const { getIO } = await import("../../socket/index.js");
+    const io = getIO();
+    io.to("admins").emit("ticket-connected", savedRoom);
+    if (savedRoom.customer && savedRoom.customer.accountId) {
+      io.to(`franchise-${savedRoom.customer.accountId}`).emit("ticket-connected", savedRoom);
+    }
+  } catch (err) {
+    console.error("Failed to broadcast new franchise room over socket:", err.message);
+  }
+
   return res.json(ApiResponse.success(savedRoom, "Franchise chat room created successfully"));
 });
 
@@ -359,6 +370,17 @@ export const assignFranchiseAdminToRoom = asyncHandler(async (req, res) => {
     .populate("customer", "firstName lastName userName phoneNumber emailId accountId")
     .populate("assignedStaff", "name email")
     .populate("assignedFranchiseAdmin", "name email accountId role status");
+
+  try {
+    const { getIO } = await import("../../socket/index.js");
+    const io = getIO();
+    io.to("admins").emit("ticket-updated", updatedRoom);
+    if (updatedRoom.customer && updatedRoom.customer.accountId) {
+      io.to(`franchise-${updatedRoom.customer.accountId}`).emit("ticket-updated", updatedRoom);
+    }
+  } catch (err) {
+    console.error("Failed to broadcast franchise admin assignment update over socket:", err.message);
+  }
 
   return res.json(
     ApiResponse.success(
