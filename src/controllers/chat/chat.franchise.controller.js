@@ -338,6 +338,8 @@ export const assignFranchiseAdminToRoom = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Chat room not found");
   }
 
+  const previousStaffId = room.assignedStaff || null;
+
   const roomAccountId = room.customer?.accountId;
   if (!roomAccountId) {
     throw new ApiError(400, "Room customer account not found");
@@ -374,10 +376,7 @@ export const assignFranchiseAdminToRoom = asyncHandler(async (req, res) => {
   try {
     const { getIO } = await import("../../socket/index.js");
     const io = getIO();
-    io.to("admins").emit("ticket-updated", updatedRoom);
-    if (updatedRoom.customer && updatedRoom.customer.accountId) {
-      io.to(`franchise-${updatedRoom.customer.accountId}`).emit("ticket-updated", updatedRoom);
-    }
+    ChatService.broadcastTicketUpdate(io, updatedRoom, previousStaffId);
   } catch (err) {
     console.error("Failed to broadcast franchise admin assignment update over socket:", err.message);
   }

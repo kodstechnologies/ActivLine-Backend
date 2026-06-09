@@ -1615,7 +1615,7 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
     }
 
     const customerSnapshot = toCustomerSnapshot(customer);
-    
+
     const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
     const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
 
@@ -1687,7 +1687,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     };
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
-   
+
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,

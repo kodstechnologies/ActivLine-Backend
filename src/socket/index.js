@@ -110,9 +110,13 @@ export const initSocket = (server) => {
     if (!connectedUsers.has(uid)) connectedUsers.set(uid, new Set());
     connectedUsers.get(uid).add(socket.id);
 
+    /* -------- PRIVATE USER ROOM JOIN -------- */
+    socket.join(`user-${uid}`);
+    console.log(`👤 Socket ${socket.id} joined private room: user-${uid}`);
+
     /* -------- GLOBAL ROOM JOINS -------- */
     const role = socket.user.role;
-    if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "ADMIN_STAFF") {
+    if (role === "ADMIN" || role === "SUPER_ADMIN") {
       socket.join("admins");
       console.log(`👤 Socket ${socket.id} joined global room: admins`);
     } else if (role === "FRANCHISE_ADMIN") {
@@ -141,7 +145,7 @@ export const initSocket = (server) => {
           if (!roomId) return;
           if (!message?.trim() && attachments.length === 0) return;
 
-          const room = await ChatRoom.findById(roomId).populate("customer", "accountId");
+          const room = await ChatRoom.findById(roomId).populate("customer", "accountId").populate("assignedStaff", "_id");
           if (!room) throw new Error("Chat room not found");
 
           /* ===============================
@@ -224,9 +228,13 @@ export const initSocket = (server) => {
           io.to(roomId).emit("new-message", populatedMsg);
 
           // Broadcast message globally for sidebar updates
-          io.to("admins").emit("global-new-message", { roomId, message: populatedMsg });
-          if (room.customer && room.customer.accountId) {
-            io.to(`franchise-${room.customer.accountId}`).emit("global-new-message", { roomId, message: populatedMsg });
+          if (room.assignedStaff && room.assignedStaff._id) {
+            io.to(`user-${room.assignedStaff._id}`).emit("global-new-message", { roomId, message: populatedMsg });
+          } else {
+            io.to("admins").emit("global-new-message", { roomId, message: populatedMsg });
+            if (room.customer && room.customer.accountId) {
+              io.to(`franchise-${room.customer.accountId}`).emit("global-new-message", { roomId, message: populatedMsg });
+            }
           }
 
           /* ===============================
