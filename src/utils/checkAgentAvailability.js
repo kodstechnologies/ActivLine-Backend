@@ -114,11 +114,8 @@ export const checkAgentAvailability = async (req, res, next) => {
             roomId,
             `Agent is available between ${displayStart} to ${displayEnd}. Your request has been noted, agents will contact you soon shortly.`,
           );
-          next();
         }
-      } catch (err) {
-        // Ignore update error
-      }
+      } catch (err) {}
 
       return res.json(
         ApiResponse.success(
@@ -127,6 +124,7 @@ export const checkAgentAvailability = async (req, res, next) => {
         ),
       );
     }
+
     // send message for waiting for agent response
 
     await sendSupportMessage(
