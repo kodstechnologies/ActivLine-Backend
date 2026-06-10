@@ -58,19 +58,20 @@ const getKolkataMinutes = () => {
 
   return hour * 60 + minute;
 };
+//
 
 export const checkAgentAvailability = async (req, res, next) => {
   try {
     const io = getIO();
     const { roomId } = req.body;
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const currentMinutes = getKolkataMinutes();
 
     let startMinutes = 9 * 60; // Default 9:00 AM (540 minutes)
     let endMinutes = 21 * 60; // Default 9:00 PM (1260 minutes)
     let displayStart = "9AM";
     let displayEnd = "9PM";
 
+    // Fetch franchise availability if customer has accountId
     if (req.user?.accountId) {
       const franchise = await Franchise.findOne({
         accountId: req.user.accountId,
@@ -113,6 +114,7 @@ export const checkAgentAvailability = async (req, res, next) => {
             roomId,
             `Agent is available between ${displayStart} to ${displayEnd}. Your request has been noted, agents will contact you soon shortly.`,
           );
+          next();
         }
       } catch (err) {
         // Ignore update error
