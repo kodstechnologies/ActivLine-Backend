@@ -87,6 +87,7 @@ export const initSocket = (server) => {
         _id: decoded._id,
         role: (decoded.role || "CUSTOMER").toUpperCase(),
         email: decoded.email || null,
+        accountId: decoded.accountId || null,
       };
 
       next();
@@ -109,6 +110,22 @@ export const initSocket = (server) => {
     if (!connectedUsers.has(uid)) connectedUsers.set(uid, new Set());
     connectedUsers.get(uid).add(socket.id);
 
+    /* -------- PRIVATE USER ROOM JOIN -------- */
+    socket.join(`user-${uid}`);
+    console.log(`👤 Socket ${socket.id} joined private room: user-${uid}`);
+
+    /* -------- GLOBAL ROOM JOINS -------- */
+    const role = socket.user.role;
+    if (role === "ADMIN" || role === "SUPER_ADMIN") {
+      socket.join("admins");
+      console.log(`👤 Socket ${socket.id} joined global room: admins`);
+    } else if (role === "FRANCHISE_ADMIN") {
+      if (socket.user.accountId) {
+        socket.join(`franchise-${socket.user.accountId}`);
+        console.log(`👤 Socket ${socket.id} joined global room: franchise-${socket.user.accountId}`);
+      }
+    }
+
     /* -------- JOIN ROOM -------- */
     socket.on("join-room", (roomId) => {
       if (!roomId) return;
@@ -128,7 +145,7 @@ export const initSocket = (server) => {
           if (!roomId) return;
           if (!message?.trim() && attachments.length === 0) return;
 
-          const room = await ChatRoom.findById(roomId).select("status");
+          const room = await ChatRoom.findById(roomId).populate("customer", "accountId").populate("assignedStaff", "_id");
           if (!room) throw new Error("Chat room not found");
 
           /* ===============================
@@ -209,6 +226,16 @@ export const initSocket = (server) => {
           // The populated message is sent so client has all details,
           // which is consistent with HTTP responses.
           io.to(roomId).emit("new-message", populatedMsg);
+
+          // Broadcast message globally for sidebar updates
+          if (room.assignedStaff && room.assignedStaff._id) {
+            io.to(`user-${room.assignedStaff._id}`).emit("global-new-message", { roomId, message: populatedMsg });
+          } else {
+            io.to("admins").emit("global-new-message", { roomId, message: populatedMsg });
+            if (room.customer && room.customer.accountId) {
+              io.to(`franchise-${room.customer.accountId}`).emit("global-new-message", { roomId, message: populatedMsg });
+            }
+          }
 
           /* ===============================
        UPDATE ROOM LAST MESSAGE

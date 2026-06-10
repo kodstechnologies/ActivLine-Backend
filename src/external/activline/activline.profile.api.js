@@ -18,10 +18,8 @@ export const getUserByUsername = (username) => {
 
 // get profile details by phone number
 export const getProfileByPhone = (phone) => {
-  const formData = new FormData();
-  formData.append("phone", phone);
+  // const formData = new FormData();
+  // formData.append("phone", phone);
 
-  return activlineClient.post("/get_users_by_phone", formData, {
-    headers: formData.getHeaders(),
-  });
-};
+  return activlineClient.post(`/get_user_by_phone/${phone}`);
+};

@@ -253,21 +253,15 @@ export const createCustomerService = async (payload, files) => {
 
   // 🎯 Fetch Jaze profile by phone synchronously to extract their assigned referral code
   let ownReferralCode = null;
-  // try {
   const profileResponse = await getProfileByPhone(payload.phoneNumber);
-  console.log("Profile response:", profileResponse);
   const profileData = Array.isArray(profileResponse?.data)
     ? profileResponse.data[0]
     : profileResponse?.data || profileResponse;
-
-  ownReferralCode =
-    profileData?.UserSetting?.referral_code ||
-    profileData?.referral_code ||
-    null;
-  //   console.log("Successfully fetched new user's Jaze-assigned referral code:", ownReferralCode);
-  // } catch (profileErr) {
-  //   console.error("Failed to fetch Jaze profile by phone for referral code:", profileErr.message);
-  // }
+  console.log(
+    "Fetched profile data for referral code extraction:",
+    profileData?.[0]?.[0]?.UserSetting?.referral_code,
+  );
+  ownReferralCode = profileData?.[0]?.[0]?.UserSetting?.referral_code || "";
 
   // 🔹 3. Validate referral code if user used one
   let referrer = null;
@@ -300,6 +294,11 @@ export const createCustomerService = async (payload, files) => {
   const cleanPayload = { ...payload };
   delete cleanPayload.password;
 
+  const referralData = {};
+  if (ownReferralCode) {
+    referralData.code = ownReferralCode;
+  }
+  console.log("Referral data for new customer:", referralData, ownReferralCode);
   const savedCustomer = await createCustomerRepo({
     // Customer own refer code
     referral: {
@@ -437,21 +436,15 @@ export const createCustomerService = async (payload, files) => {
     rawPayload: cleanPayload,
   });
 
-  // 🔹 5. Increase referrer count and record referral in separate schema AFTER customer creation
+  // 🔹 5. Record referral in separate schema AFTER customer creation (referredCount will increment upon plan purchase/activation)
   if (referrer) {
-    await Promise.all([
-      Customer.updateOne(
-        { _id: referrer._id },
-        { $inc: { "referral.referredCount": 1 } }
-      ),
-      Referral.create({
-        referrer: referrer._id,
-        referee: savedCustomer._id,
-        codeUsed: referralCode,
-        referredAt: new Date(),
-        referralCompleted: false,
-      })
-    ]);
+    await Referral.create({
+      referrer: referrer._id,
+      referee: savedCustomer._id,
+      codeUsed: referralCode,
+      referredAt: new Date(),
+      referralCompleted: false,
+    });
   }
   console.log("✅ Created customer:", savedCustomer);
   return {

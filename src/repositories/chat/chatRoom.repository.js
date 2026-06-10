@@ -15,12 +15,12 @@ export const findByCustomer = (customerId) =>
 export const findById = (id) =>
   ChatRoom.findById(id).populate("assignedStaff customer");
 
-export const assignStaff = (roomId, staffId) =>
-  ChatRoom.findByIdAndUpdate(
-    roomId,
-    { assignedStaff: staffId, status: "ASSIGNED" },
-    { new: true },
-  );
+export const assignStaff = (roomId, staffId) => {
+  const update = staffId
+    ? { assignedStaff: staffId, status: "ASSIGNED" }
+    : { assignedStaff: null, status: "OPEN" };
+  return ChatRoom.findByIdAndUpdate(roomId, update, { new: true });
+};
 export const findByAssignedStaff = (staffId) =>
   ChatRoom.find({ assignedStaff: staffId })
     .populate("customer", "fullName email mobile")

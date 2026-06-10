@@ -59,7 +59,13 @@ router.get(
 router.post(
   "/banner/create",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF,
+    ROLES.ADMIN_STAFF,
+    ROLES.FRANCHISE_ADMIN,
+  ),
   upload.single("file"),
   createBanner,
 );
@@ -71,7 +77,13 @@ router.post(
 router.put(
   "/banner/:bannerId",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF,
+    ROLES.ADMIN_STAFF,
+    ROLES.FRANCHISE_ADMIN,
+  ),
   upload.single("file"),
   updateBanner,
 );
@@ -79,10 +91,17 @@ router.put(
 /**
  * 🔁 PATCH /banner/:bannerId/toggle — activate / deactivate a banner
  */
+
 router.patch(
   "/banner/:bannerId/toggle",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF,
+    ROLES.ADMIN_STAFF,
+    ROLES.FRANCHISE_ADMIN,
+  ),
   toggleBanner,
 );
 
@@ -92,7 +111,13 @@ router.patch(
 router.delete(
   "/banner/:bannerId",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF,
+    ROLES.ADMIN_STAFF,
+    ROLES.FRANCHISE_ADMIN,
+  ),
   deleteBanner,
 );
 
@@ -107,7 +132,13 @@ router.get(
 router.post(
   "/referal-message",
   verifyJWT,
-  allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN),
+  allowRoles(
+    ROLES.SUPER_ADMIN,
+    ROLES.ADMIN,
+    ROLES.ADMIN_STAFF,
+    ROLES.ADMIN_STAFF,
+    ROLES.FRANCHISE_ADMIN,
+  ),
   createReferalMessage,
 );
 export default router;

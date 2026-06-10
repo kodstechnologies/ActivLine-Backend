@@ -75,7 +75,9 @@ const extractTextByKeys = (value, keys) => {
   if (!value || typeof value !== "object") return null;
 
   const normalizedTargetKeys = keys.map((k) =>
-    String(k).toLowerCase().replace(/[^a-z0-9]/g, "")
+    String(k)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, ""),
   );
 
   for (const [key, raw] of Object.entries(value)) {
@@ -128,7 +130,7 @@ const getBillingMeta = (planDetails = {}) => {
     const row = billingRows.find(
       (item) =>
         String(item?.property || "").toLowerCase() ===
-        String(propertyName).toLowerCase()
+        String(propertyName).toLowerCase(),
     );
     return row?.value ?? null;
   };
@@ -145,7 +147,7 @@ const extractPlanPeriodDays = (planDetails = {}) => {
     : [];
 
   const periodRow = billingRows.find(
-    (row) => String(row?.property || "").toLowerCase() === "period"
+    (row) => String(row?.property || "").toLowerCase() === "period",
   );
   const raw = normalizeText(periodRow?.value);
   if (!raw) return null;
@@ -167,7 +169,9 @@ const extractAllTextByKeys = (value, keys, bag = new Set()) => {
   if (!value || typeof value !== "object") return bag;
 
   const normalizedTargetKeys = keys.map((k) =>
-    String(k).toLowerCase().replace(/[^a-z0-9]/g, "")
+    String(k)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, ""),
   );
 
   for (const key of keys) {
@@ -207,7 +211,8 @@ const normalizeText = (value) => {
   return text || null;
 };
 
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const resolvePlanNameFromDetails = (planDetails, fallback) => {
   if (!planDetails || typeof planDetails !== "object") return fallback;
@@ -226,13 +231,13 @@ const resolvePlanNameFromDetails = (planDetails, fallback) => {
     : [];
 
   const fromBilling = billingRows.find(
-    (row) => String(row?.property || "").toLowerCase() === "description"
+    (row) => String(row?.property || "").toLowerCase() === "description",
   );
   const billingDesc = normalizeText(fromBilling?.value);
   if (billingDesc) return billingDesc;
 
   const fromProfile = profileRows.find(
-    (row) => String(row?.property || "").toLowerCase() === "package type"
+    (row) => String(row?.property || "").toLowerCase() === "package type",
   );
   const profileVal = normalizeText(fromProfile?.value);
   if (profileVal) return profileVal;
@@ -243,7 +248,10 @@ const resolvePlanNameFromDetails = (planDetails, fallback) => {
 const resolvePlanName = (paymentObj) => {
   const raw = normalizeText(paymentObj?.planName);
   const fallback = raw;
-  const candidate = resolvePlanNameFromDetails(paymentObj?.planDetails, fallback);
+  const candidate = resolvePlanNameFromDetails(
+    paymentObj?.planDetails,
+    fallback,
+  );
 
   if (!raw) return candidate;
   if (!candidate) return raw;
@@ -287,7 +295,8 @@ const toCustomerSnapshot = (customer) => {
     };
   }
 
-  const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+  const fullName =
+    `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
 
   return {
     customerId: customer._id || null,
@@ -303,7 +312,8 @@ const toCustomerSnapshot = (customer) => {
 const toPaidBySnapshot = (customer) => {
   if (!customer) return null;
 
-  const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
+  const fullName =
+    `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
 
   return {
     paidByCustomerId: customer._id || null,
@@ -321,15 +331,21 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
 
   if (normalizedAccountId) {
     const found = await Customer.findOne({ accountId: normalizedAccountId })
-      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .select(
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+      )
       .sort({ updatedAt: -1 })
       .lean();
     if (found) return found;
   }
 
   if (normalizedProfileId) {
-    const found = await Customer.findOne({ activlineUserId: normalizedProfileId })
-      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+    const found = await Customer.findOne({
+      activlineUserId: normalizedProfileId,
+    })
+      .select(
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+      )
       .sort({ updatedAt: -1 })
       .lean();
     if (found) return found;
@@ -338,7 +354,9 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
   const numericGroupId = Number(normalizedGroupId);
   if (Number.isFinite(numericGroupId)) {
     const found = await Customer.findOne({ userGroupId: numericGroupId })
-      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .select(
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+      )
       .sort({ updatedAt: -1 })
       .lean();
     if (found) return found;
@@ -346,7 +364,9 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
 
   if (normalizedGroupId) {
     const found = await Customer.findOne({ userGroupId: normalizedGroupId })
-      .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+      .select(
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+      )
       .sort({ updatedAt: -1 })
       .lean();
     if (found) return found;
@@ -360,10 +380,12 @@ const buildCustomerResolver = async (paymentDocs) => {
 
   for (const payment of paymentDocs) {
     const paymentObj = payment.toObject();
-    [paymentObj.accountId, paymentObj.groupId, paymentObj.profileId].forEach((v) => {
-      const key = normalizeText(v);
-      if (key) keySet.add(key);
-    });
+    [paymentObj.accountId, paymentObj.groupId, paymentObj.profileId].forEach(
+      (v) => {
+        const key = normalizeText(v);
+        if (key) keySet.add(key);
+      },
+    );
   }
 
   const keys = Array.from(keySet);
@@ -382,7 +404,9 @@ const buildCustomerResolver = async (paymentDocs) => {
       { userGroupId: { $in: numericGroupIds } },
     ],
   })
-    .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+    .select(
+      "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+    )
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -395,9 +419,11 @@ const buildCustomerResolver = async (paymentDocs) => {
     const groupKey = normalizeText(customer.userGroupId);
     const activlineKey = normalizeText(customer.activlineUserId);
 
-    if (accountKey && !byAccountId.has(accountKey)) byAccountId.set(accountKey, customer);
+    if (accountKey && !byAccountId.has(accountKey))
+      byAccountId.set(accountKey, customer);
     if (groupKey && !byGroupId.has(groupKey)) byGroupId.set(groupKey, customer);
-    if (activlineKey && !byActivlineUserId.has(activlineKey)) byActivlineUserId.set(activlineKey, customer);
+    if (activlineKey && !byActivlineUserId.has(activlineKey))
+      byActivlineUserId.set(activlineKey, customer);
   }
 
   return (paymentDoc) => {
@@ -446,7 +472,10 @@ const mapPaymentHistoryDoc = (doc, customer) => {
   const baseDate = obj.paidAt || obj.createdAt || null;
   const planEndDate =
     baseDate && periodDays
-      ? new Date(new Date(baseDate).getTime() + Number(periodDays) * 24 * 60 * 60 * 1000)
+      ? new Date(
+          new Date(baseDate).getTime() +
+            Number(periodDays) * 24 * 60 * 60 * 1000,
+        )
       : null;
 
   return {
@@ -456,6 +485,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     status: obj.status,
     isPaid: obj.status === "SUCCESS",
     amount: obj.planAmount,
+    platformFee: obj.platformFee !== undefined ? obj.platformFee : 0,
     currency: obj.currency,
     groupId: obj.groupId,
     accountId: resolvedAccountId,
@@ -512,7 +542,9 @@ const isPaymentOwnedByCustomer = (paymentDoc, customer) => {
   const ids = new Set(buildCustomerIdentitySet(customer));
   if (!ids.size) return false;
 
-  const payment = paymentDoc?.toObject ? paymentDoc.toObject() : paymentDoc || {};
+  const payment = paymentDoc?.toObject
+    ? paymentDoc.toObject()
+    : paymentDoc || {};
   const matchKeys = [
     normalizeText(payment.accountId),
     normalizeText(payment.groupId),
@@ -548,9 +580,9 @@ export const createOrder = async (req, res, next) => {
       receipt: `rcpt_${Date.now()}`,
     });
 
-  return res.status(200).json({
-    success: true,
-    orderId: order.id,
+    return res.status(200).json({
+      success: true,
+      orderId: order.id,
       key,
       amount: order.amount,
       currency: order.currency,
@@ -653,12 +685,14 @@ export const createPlanOrder = async (req, res, next) => {
     const groupRows = extractRowsFromGroupDetails(groupDetailsRes);
     const normalizedProfileId = normalizeText(profileId);
     const hasProfileIdInRows = groupRows.some((row) =>
-      normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS))
+      normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS)),
     );
 
     const hasValidMapping = groupRows.some((row) => {
       const rowGroupId = normalizeText(extractTextByKeys(row, GROUP_ID_KEYS));
-      const rowProfileId = normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS));
+      const rowProfileId = normalizeText(
+        extractTextByKeys(row, PROFILE_ID_KEYS),
+      );
 
       if (rowGroupId !== finalGroupId) return false;
       if (!hasProfileIdInRows) return true;
@@ -673,8 +707,14 @@ export const createPlanOrder = async (req, res, next) => {
       });
     }
 
+    const platformFee =
+      req.body?.platformFee !== undefined ? Number(req.body.platformFee) : 0;
+    const validatedPlatformFee =
+      Number.isFinite(platformFee) && platformFee >= 0 ? platformFee : 0;
+    const totalChargeAmount = finalAmount + validatedPlatformFee;
+
     const order = await createRazorpayOrder({
-      amount: finalAmount,
+      amount: totalChargeAmount,
       currency: "INR",
       receipt: `plan_${profileId}_${Date.now()}`,
       notes: {
@@ -693,21 +733,26 @@ export const createPlanOrder = async (req, res, next) => {
           accountId: finalAccountId,
           profileId: String(profileId),
           planName: String(planName),
-          planAmount: Number(finalAmount),
+          planAmount: Number(totalChargeAmount),
+          platformFee: validatedPlatformFee,
           currency: order.currency || "INR",
           status: "PENDING",
           planDetails: profilePayload,
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     let paidByPatch = null;
     let customerDoc = null;
-    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+    const bodyUserName = normalizeText(
+      req.body?.userName || req.body?.username,
+    );
     if (req.user?._id) {
       const authCustomer = await Customer.findById(req.user._id)
-        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .select(
+          "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        )
         .lean();
       customerDoc = authCustomer || null;
       paidByPatch = toPaidBySnapshot(authCustomer);
@@ -724,7 +769,7 @@ export const createPlanOrder = async (req, res, next) => {
       const resolvedCustomer = await resolveCustomerForPayment(
         finalAccountId,
         finalGroupId,
-        profileId
+        profileId,
       );
       customerDoc = resolvedCustomer || customerDoc;
     }
@@ -743,7 +788,7 @@ export const createPlanOrder = async (req, res, next) => {
     if (paidByPatch) {
       await PaymentHistory.updateOne(
         { razorpayOrderId: order.id },
-        { $set: paidByPatch }
+        { $set: paidByPatch },
       );
     }
 
@@ -781,7 +826,9 @@ export const verifyPlanPayment = async (req, res, next) => {
     const accountIdFromBody = normalizeText(req.body?.accountId);
     const groupIdFromBody = normalizeText(req.body?.groupId);
     const profileIdFromBody = normalizeText(req.body?.profileId);
-    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+    const bodyUserName = normalizeText(
+      req.body?.userName || req.body?.username,
+    );
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
@@ -817,7 +864,9 @@ export const verifyPlanPayment = async (req, res, next) => {
     let paidByPatch = null;
     if (req.user?._id) {
       const authCustomer = await Customer.findById(req.user._id)
-        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .select(
+          "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        )
         .lean();
       paidByPatch = toPaidBySnapshot(authCustomer);
     }
@@ -833,7 +882,7 @@ export const verifyPlanPayment = async (req, res, next) => {
       const resolvedCustomer = await resolveCustomerForPayment(
         resolvedAccountId,
         resolvedGroupId,
-        resolvedProfileId
+        resolvedProfileId,
       );
       if (resolvedCustomer) {
         paidByPatch = toPaidBySnapshot(resolvedCustomer);
@@ -858,7 +907,7 @@ export const verifyPlanPayment = async (req, res, next) => {
             razorpayPaymentId: String(razorpay_payment_id),
             razorpaySignature: String(razorpay_signature),
           },
-        }
+        },
       );
 
       return res.status(400).json({
@@ -879,10 +928,12 @@ export const verifyPlanPayment = async (req, res, next) => {
           paidAt: new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
-    const resolveCustomer = updated ? await buildCustomerResolver([updated]) : null;
+    const resolveCustomer = updated
+      ? await buildCustomerResolver([updated])
+      : null;
     const responseData = updated
       ? mapPaymentHistoryDoc(updated, resolveCustomer(updated))
       : null;
@@ -893,7 +944,7 @@ export const verifyPlanPayment = async (req, res, next) => {
         const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         await Customer.findOneAndUpdate(
           { activlineUserId: resolvedProfileId },
-          { $set: { expirationDate: formattedDate } }
+          { $set: { expirationDate: formattedDate } },
         );
       }
     }
@@ -920,7 +971,9 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
     }
 
     const customer = await Customer.findById(customerId)
-      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     if (!customer) {
@@ -1005,30 +1058,34 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
     // Used for summary counts; `customer` is fetched above and contains `accountId`.
     const accountId = customer?.accountId;
 
-    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
-      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      PaymentHistory.countDocuments(query),
-      PaymentHistory.aggregate([
-        { $match: query },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-      PaymentHistory.aggregate([
-        { $match: query },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
-            pendingCount: {
-              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
-            },
-            notPaidCount: {
-              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+    const [items, total, summaryRows, totalsRow, totalCustomers] =
+      await Promise.all([
+        PaymentHistory.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        PaymentHistory.countDocuments(query),
+        PaymentHistory.aggregate([
+          { $match: query },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        PaymentHistory.aggregate([
+          { $match: query },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+              pendingCount: {
+                $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+              },
+              notPaidCount: {
+                $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+              },
             },
           },
-        },
-      ]),
-      Customer.countDocuments({}),
-    ]);
+        ]),
+        Customer.countDocuments({}),
+      ]);
 
     const statusSummary = {
       PENDING: 0,
@@ -1089,7 +1146,9 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
     }
 
     const customer = await Customer.findById(customerId)
-      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     if (!customer) {
@@ -1170,30 +1229,36 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
     const skip = (page - 1) * limit;
     const accountId = customer?.accountId;
 
-    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
-      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      PaymentHistory.countDocuments(query),
-      PaymentHistory.aggregate([
-        { $match: query },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-      PaymentHistory.aggregate([
-        { $match: query },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
-            pendingCount: {
-              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
-            },
-            notPaidCount: {
-              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+    const [items, total, summaryRows, totalsRow, totalCustomers] =
+      await Promise.all([
+        PaymentHistory.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        PaymentHistory.countDocuments(query),
+        PaymentHistory.aggregate([
+          { $match: query },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        PaymentHistory.aggregate([
+          { $match: query },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+              pendingCount: {
+                $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+              },
+              notPaidCount: {
+                $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+              },
             },
           },
-        },
-      ]),
-      accountId ? Customer.countDocuments({ accountId: String(accountId) }) : Customer.countDocuments({}),
-    ]);
+        ]),
+        accountId
+          ? Customer.countDocuments({ accountId: String(accountId) })
+          : Customer.countDocuments({}),
+      ]);
 
     const statusSummary = {
       PENDING: 0,
@@ -1237,7 +1302,9 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
 
 export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
   try {
-    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+    const bodyUserName = normalizeText(
+      req.body?.userName || req.body?.username,
+    );
 
     if (!bodyUserName) {
       return res.status(400).json({
@@ -1259,7 +1326,9 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
     const customer = await Customer.findOne({
       userName: { $regex: `^${escapeRegex(bodyUserName)}$`, $options: "i" },
     })
-      .select("_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     const userNameRegex = {
@@ -1379,9 +1448,15 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
 
 // Returns payment history for the customer's "current plan" (latest SUCCESS purchase)
 // by matching PaymentHistory.paidByUserName/paidByName.
-export const getCurrentPlanPaymentHistoryByCustomerUserName = async (req, res, next) => {
+export const getCurrentPlanPaymentHistoryByCustomerUserName = async (
+  req,
+  res,
+  next,
+) => {
   try {
-    const bodyUserName = normalizeText(req.body?.userName || req.body?.username);
+    const bodyUserName = normalizeText(
+      req.body?.userName || req.body?.username,
+    );
 
     if (!bodyUserName) {
       return res.status(400).json({
@@ -1454,7 +1529,9 @@ export const getMySinglePlanPaymentDetails = async (req, res, next) => {
     }
 
     const customer = await Customer.findById(customerId)
-      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     if (!customer) {
@@ -1502,7 +1579,9 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
     }
 
     const customer = await Customer.findById(customerId)
-      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     if (!customer) {
@@ -1511,7 +1590,6 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
         message: "Customer not found",
       });
     }
-
     const baseQuery = buildCustomerOwnershipQuery(customer);
     if (!baseQuery) {
       return res.status(200).json({
@@ -1519,9 +1597,16 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
         data: null,
       });
     }
-
-    const latestPayment = await PaymentHistory.findOne(baseQuery).sort({ createdAt: -1 });
-
+    const latestPayment = await PaymentHistory.findOne({
+      $or: [
+        { paidByPhone: { $in: customer.phoneNumber } },
+        { paidByEmail: { $in: customer.emailId } },
+        { paidByCustomerId: { $in: [customer._id] } },
+        { paidByUserName: { $in: [customer.userName] } },
+      ],
+    }).sort({
+      createdAt: -1,
+    });
     if (!latestPayment) {
       return res.status(200).json({
         success: true,
@@ -1530,6 +1615,7 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
     }
 
     const customerSnapshot = toCustomerSnapshot(customer);
+
     const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
     const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
 
@@ -1562,7 +1648,9 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     }
 
     const customer = await Customer.findById(customerId)
-      .select("accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .select(
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+      )
       .lean();
 
     if (!customer) {
@@ -1599,34 +1687,34 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     };
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
-// console.log(paymentData,paymentData?.plan?.details)
+
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
-      planEndDate:paymentData?.planEndDate,
+      planEndDate: paymentData?.planEndDate,
       planName: paymentData.planName,
       amount: paymentData.amount,
       customer: paymentData.customer,
       plan: paymentData.plan,
       previousBalance: 0,
-      taxRate: 0.09
+      taxRate: 0.09,
     });
 
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
 
     const pdfUint8Array = await page.pdf({
-      width: '595px',
-      height: '986px',
-    
+      width: "595px",
+      height: "986px",
+
       printBackground: true,
-      margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' },
-      pageRanges: '1'
+      margin: { top: "0px", right: "0px", bottom: "0px", left: "0px" },
+      pageRanges: "1",
     });
 
     await browser.close();
@@ -1701,7 +1789,7 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
           try {
             const groupDetails = await getGroupDetails(exactAccountId);
             relatedGroupIdStrings = Array.from(
-              extractAllTextByKeys(groupDetails, GROUP_ID_KEYS)
+              extractAllTextByKeys(groupDetails, GROUP_ID_KEYS),
             );
           } catch (_err) {
             // Best-effort fallback: continue with exact accountId match only.
@@ -1753,32 +1841,36 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
 
     const skip = (page - 1) * limit;
 
-    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
-      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      PaymentHistory.countDocuments(query),
-      PaymentHistory.aggregate([
-        { $match: query },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-      PaymentHistory.aggregate([
-        { $match: query },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
-            pendingCount: {
-              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
-            },
-            notPaidCount: {
-              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+    const [items, total, summaryRows, totalsRow, totalCustomers] =
+      await Promise.all([
+        PaymentHistory.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        PaymentHistory.countDocuments(query),
+        PaymentHistory.aggregate([
+          { $match: query },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        PaymentHistory.aggregate([
+          { $match: query },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+              pendingCount: {
+                $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+              },
+              notPaidCount: {
+                $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+              },
             },
           },
-        },
-      ]),
-      accountId
-        ? Customer.countDocuments({ accountId: String(accountId) })
-        : Customer.countDocuments({}),
-    ]);
+        ]),
+        accountId
+          ? Customer.countDocuments({ accountId: String(accountId) })
+          : Customer.countDocuments({}),
+      ]);
 
     const statusSummary = {
       PENDING: 0,
@@ -1826,7 +1918,10 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
         const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
         const doc = item?.toObject ? item.toObject() : item || {};
         const userName =
-          doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+          doc.paidByUserName ||
+          mapped?.paidBy?.userName ||
+          mapped?.customer?.userName ||
+          null;
         const { customer, paidBy, plan, ...rest } = mapped || {};
         return { ...rest, userName };
       }),
@@ -1838,7 +1933,9 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
 
 export const getLatestFranchisePaymentHistory = async (req, res, next) => {
   try {
-    const accountId = req.user?.accountId ? String(req.user.accountId).trim() : "";
+    const accountId = req.user?.accountId
+      ? String(req.user.accountId).trim()
+      : "";
 
     if (!accountId) {
       return res.status(400).json({
@@ -1910,7 +2007,11 @@ export const getLatestPurchasedPlan = async (req, res, next) => {
       ? String(req.user?.accountId || "").trim()
       : requestedAccountId || "";
 
-    if (isFranchiseAdmin && requestedAccountId && requestedAccountId !== accountId) {
+    if (
+      isFranchiseAdmin &&
+      requestedAccountId &&
+      requestedAccountId !== accountId
+    ) {
       return res.status(403).json({
         success: false,
         message: "Access Denied. You can only view your franchise data.",
@@ -1933,8 +2034,10 @@ export const getLatestPurchasedPlan = async (req, res, next) => {
       ...(orFilters.length === 1 ? orFilters[0] : { $or: orFilters }),
     };
 
-    const latestPayment = await PaymentHistory.findOne(query)
-      .sort({ paidAt: -1, createdAt: -1 });
+    const latestPayment = await PaymentHistory.findOne(query).sort({
+      paidAt: -1,
+      createdAt: -1,
+    });
 
     if (!latestPayment) {
       return res.status(200).json({
@@ -1949,8 +2052,13 @@ export const getLatestPurchasedPlan = async (req, res, next) => {
     }
 
     const resolveCustomer = await buildCustomerResolver([latestPayment]);
-    const mapped = mapPaymentHistoryDoc(latestPayment, resolveCustomer(latestPayment));
-    const doc = latestPayment?.toObject ? latestPayment.toObject() : latestPayment || {};
+    const mapped = mapPaymentHistoryDoc(
+      latestPayment,
+      resolveCustomer(latestPayment),
+    );
+    const doc = latestPayment?.toObject
+      ? latestPayment.toObject()
+      : latestPayment || {};
     const userName =
       doc.paidByUserName ||
       mapped?.paidBy?.userName ||
@@ -2164,10 +2272,17 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
           const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
           const doc = item?.toObject ? item.toObject() : item || {};
           const mappedUserName =
-            doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+            doc.paidByUserName ||
+            mapped?.paidBy?.userName ||
+            mapped?.customer?.userName ||
+            null;
           return { item, mapped, mappedUserName };
         })
-        .filter((entry) => String(entry.mappedUserName || "").toLowerCase() === normalizedFilter);
+        .filter(
+          (entry) =>
+            String(entry.mappedUserName || "").toLowerCase() ===
+            normalizedFilter,
+        );
 
       const statusSummary = { PENDING: 0, SUCCESS: 0, FAILED: 0 };
       for (const entry of mappedItems) {
@@ -2183,7 +2298,7 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
           if (entry.mapped?.status !== "SUCCESS") acc.notPaidCount += 1;
           return acc;
         },
-        { totalAmount: 0, pendingCount: 0, notPaidCount: 0 }
+        { totalAmount: 0, pendingCount: 0, notPaidCount: 0 },
       );
 
       const totalCustomers = await Customer.countDocuments({});
@@ -2224,30 +2339,34 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
       });
     }
 
-    const [items, total, summaryRows, totalsRow, totalCustomers] = await Promise.all([
-      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      PaymentHistory.countDocuments(query),
-      PaymentHistory.aggregate([
-        { $match: query },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
-      PaymentHistory.aggregate([
-        { $match: query },
-        {
-          $group: {
-            _id: null,
-            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
-            pendingCount: {
-              $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
-            },
-            notPaidCount: {
-              $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+    const [items, total, summaryRows, totalsRow, totalCustomers] =
+      await Promise.all([
+        PaymentHistory.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit),
+        PaymentHistory.countDocuments(query),
+        PaymentHistory.aggregate([
+          { $match: query },
+          { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        PaymentHistory.aggregate([
+          { $match: query },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+              pendingCount: {
+                $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] },
+              },
+              notPaidCount: {
+                $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] },
+              },
             },
           },
-        },
-      ]),
-      Customer.countDocuments({}),
-    ]);
+        ]),
+        Customer.countDocuments({}),
+      ]);
 
     const statusSummary = {
       PENDING: 0,
@@ -2298,7 +2417,10 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
         const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
         const doc = item?.toObject ? item.toObject() : item || {};
         const userName =
-          doc.paidByUserName || mapped?.paidBy?.userName || mapped?.customer?.userName || null;
+          doc.paidByUserName ||
+          mapped?.paidBy?.userName ||
+          mapped?.customer?.userName ||
+          null;
         const { customer, paidBy, plan, ...rest } = mapped || {};
         return { ...rest, userName };
       }),
@@ -2307,4 +2429,3 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     return next(error);
   }
 };
-

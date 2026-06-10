@@ -20,6 +20,24 @@ import { sendMessage } from "../../utils/sendMessage.js";
 import cannedResponseModel from "../../models/admin/Settings/cannedResponse.model.js";
 import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
+export const broadcastTicketUpdate = (io, room, previousStaffId = null) => {
+  try {
+    io.to("admins").emit("ticket-updated", room);
+    if (room.customer && room.customer.accountId) {
+      io.to(`franchise-${room.customer.accountId}`).emit("ticket-updated", room);
+    }
+    if (room.assignedStaff && room.assignedStaff._id) {
+      io.to(`user-${room.assignedStaff._id}`).emit("ticket-updated", room);
+    }
+    if (previousStaffId && String(previousStaffId) !== String(room.assignedStaff?._id)) {
+      io.to(`user-${previousStaffId}`).emit("ticket-updated", room);
+    }
+  } catch (err) {
+    console.error("Failed to broadcast ticket update:", err.message);
+  }
+};
+
+
 const getResolvedTicketSMSTemplate = (msgText, customerName, roomId) => {
   const normalized = String(msgText || "").toLowerCase();
 
@@ -443,6 +461,17 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       }
     }
 
+    try {
+      const populatedRoom = await ChatRoom.findById(roomId)
+        .populate("customer", "firstName lastName userName phoneNumber emailId accountId")
+        .populate("assignedStaff", "name email")
+        .populate("assignedFranchiseAdmin", "name email accountId role status");
+
+      broadcastTicketUpdate(getIO(), populatedRoom);
+    } catch (err) {
+      console.error("Failed to broadcast ticket status update:", err.message);
+    }
+
     return closedRoom;
   }
   // ─────────────────────────────────────────────────────────────────────────────
@@ -610,6 +639,17 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
     console.error("Franchise ticket notification failed:", err?.message);
   }
 
+  try {
+    const populatedRoom = await ChatRoom.findById(roomId)
+      .populate("customer", "firstName lastName userName phoneNumber emailId accountId")
+      .populate("assignedStaff", "name email")
+      .populate("assignedFranchiseAdmin", "name email accountId role status");
+
+    broadcastTicketUpdate(getIO(), populatedRoom);
+  } catch (err) {
+    console.error("Failed to broadcast ticket status update:", err.message);
+  }
+
   return updatedRoom;
 };
 
@@ -619,10 +659,24 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
  * ===============================
  */
 export const assignStaffToRoom = async (roomId, staffId) => {
+  const oldRoom = await ChatRoom.findById(roomId).select("assignedStaff");
+  const previousStaffId = oldRoom?.assignedStaff?._id || oldRoom?.assignedStaff || null;
+
   const room = await ChatRoomRepo.assignStaff(roomId, staffId);
 
   if (!room) {
     throw new ApiError(404, "Chat room not found");
+  }
+
+  try {
+    const populatedRoom = await ChatRoom.findById(roomId)
+      .populate("customer", "firstName lastName userName phoneNumber emailId accountId")
+      .populate("assignedStaff", "name email")
+      .populate("assignedFranchiseAdmin", "name email accountId role status");
+
+    broadcastTicketUpdate(getIO(), populatedRoom, previousStaffId);
+  } catch (err) {
+    console.error("Failed to broadcast ticket assignee update:", err.message);
   }
 
   return room;
@@ -765,6 +819,21 @@ export const connectToAgent = async (req, roomId) => {
 
   room.isConnectedToAgent = true;
   await room.save();
+
+  try {
+    const populatedRoom = await ChatRoom.findById(roomId)
+      .populate("customer", "firstName lastName userName phoneNumber emailId accountId")
+      .populate("assignedStaff", "name email")
+      .populate("assignedFranchiseAdmin", "name email accountId role status");
+
+    const io = getIO();
+    io.to("admins").emit("ticket-connected", populatedRoom);
+    if (populatedRoom.customer && populatedRoom.customer.accountId) {
+      io.to(`franchise-${populatedRoom.customer.accountId}`).emit("ticket-connected", populatedRoom);
+    }
+  } catch (err) {
+    console.error("Failed to broadcast ticket connection over socket:", err.message);
+  }
 
   // Log transition
   await createActivityLog({
