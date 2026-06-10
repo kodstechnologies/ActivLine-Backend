@@ -59,13 +59,13 @@ const getKolkataMinutes = () => {
   return hour * 60 + minute;
 };
 //
-
+// This middleware checks if agents are available based on the current time and franchise settings.
 export const checkAgentAvailability = async (req, res, next) => {
   try {
     const io = getIO();
     const { roomId } = req.body;
     const currentMinutes = getKolkataMinutes();
-
+    // Default availability is 9:00 AM to 9:00 PM (540 to 1260 minutes)
     let startMinutes = 9 * 60; // Default 9:00 AM (540 minutes)
     let endMinutes = 21 * 60; // Default 9:00 PM (1260 minutes)
     let displayStart = "9AM";
