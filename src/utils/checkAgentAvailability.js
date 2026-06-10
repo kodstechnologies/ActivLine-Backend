@@ -42,8 +42,6 @@ const sendSupportMessage = async (io, roomId, newMessage) => {
     io.to(roomId).emit("new-message", populatedMsg);
   }, 5000);
 };
-<<<<<<< HEAD
-=======
 // This function calculates the current time in Kolkata in minutes since midnight
 const getKolkataMinutes = () => {
   const now = new Date();
@@ -60,7 +58,6 @@ const getKolkataMinutes = () => {
 
   return hour * 60 + minute;
 };
->>>>>>> af2f12a3ae75e9c726602c122dfd048a76a63581
 
 export const checkAgentAvailability = async (req, res, next) => {
   try {
