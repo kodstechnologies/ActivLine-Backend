@@ -22,6 +22,10 @@ export const getNotifications = asyncHandler(async (req, res) => {
     recipientUser: _id,
   };
 
+  if (req.query.isRead !== undefined) {
+    filter.isRead = String(req.query.isRead) === "true";
+  }
+
   const [notifications, total] = await Promise.all([
     Notification.find(filter)
       .sort({ createdAt: -1 })
@@ -72,7 +76,10 @@ export const markNotificationAsRead = asyncHandler(async (req, res) => {
 export const deleteSingleNotification = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const notification = await Notification.findById(id);
+  const notification = await Notification.findOne({
+    _id: id,
+    recipientUser: req.user._id,
+  });
 
   if (!notification) {
     throw new ApiError(404, "Notification not found");
@@ -89,10 +96,11 @@ export const deleteSingleNotification = asyncHandler(async (req, res) => {
  * DELETE all notifications for user role
  */
 export const deleteAllNotifications = asyncHandler(async (req, res) => {
-  const role = req.user.role;
+  const { _id, role } = req.user;
 
   await Notification.deleteMany({
-    roles: { $in: [role] },
+    recipientUser: _id,
+    recipientRole: role,
   });
 
   res.status(200).json(
@@ -120,3 +128,23 @@ export const getUnreadNotificationCount = async (req, res) => {
     },
   });
 };
+
+/**
+ * 🔔 MARK ALL notifications as read
+ */
+export const markAllNotificationsRead = asyncHandler(async (req, res) => {
+  const { _id, role } = req.user;
+
+  await Notification.updateMany(
+    {
+      recipientUser: _id,
+      recipientRole: role,
+      isRead: false,
+    },
+    { isRead: true }
+  );
+
+  res.status(200).json(
+    ApiResponse.success(null, "All notifications marked as read")
+  );
+});

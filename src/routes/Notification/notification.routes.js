@@ -4,7 +4,8 @@ import {
   markNotificationAsRead,
   deleteSingleNotification,
   deleteAllNotifications,
-   getUnreadNotificationCount,
+  getUnreadNotificationCount,
+  markAllNotificationsRead,
 } from "../../controllers/Notification/notification.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import customerNotificationRoutes from "./customer.notification.routes.js";
@@ -16,6 +17,11 @@ const router = Router();
  * admin | super_admin | staff
  */
 router.get("/", verifyJWT, getNotifications);
+
+/**
+ * MARK ALL notifications as read
+ */
+router.patch("/mark-all-read", verifyJWT, markAllNotificationsRead);
 
 /**
  * MARK single notification as read

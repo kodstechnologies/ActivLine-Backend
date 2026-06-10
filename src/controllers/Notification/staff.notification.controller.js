@@ -21,6 +21,10 @@ export const getMyStaffNotifications = asyncHandler(async (req, res) => {
     recipientRole: "ADMIN_STAFF",
   };
 
+  if (req.query.isRead !== undefined) {
+    filter.isRead = String(req.query.isRead) === "true";
+  }
+
   const [notifications, total] = await Promise.all([
     Notification.find(filter)
       .sort({ createdAt: -1 })
