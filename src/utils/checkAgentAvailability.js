@@ -42,7 +42,7 @@ const sendSupportMessage = async (io, roomId, newMessage) => {
     io.to(roomId).emit("new-message", populatedMsg);
   }, 5000);
 };
-
+// This function calculates the current time in Kolkata in minutes since midnight
 const getKolkataMinutes = () => {
   const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -51,11 +51,11 @@ const getKolkataMinutes = () => {
     minute: "numeric",
     hourCycle: "h23",
   });
-  
+
   const parts = formatter.formatToParts(now);
   const hour = parseInt(parts.find((p) => p.type === "hour").value, 10);
   const minute = parseInt(parts.find((p) => p.type === "minute").value, 10);
-  
+
   return hour * 60 + minute;
 };
 
