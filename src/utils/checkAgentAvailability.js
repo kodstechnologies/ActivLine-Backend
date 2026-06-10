@@ -55,7 +55,6 @@ export const checkAgentAvailability = async (req, res, next) => {
     let displayStart = "9AM";
     let displayEnd = "9PM";
 
-    // Fetch franchise availability if customer has accountId
     if (req.user?.accountId) {
       const franchise = await Franchise.findOne({
         accountId: req.user.accountId,
