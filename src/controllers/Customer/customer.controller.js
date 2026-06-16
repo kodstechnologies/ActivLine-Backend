@@ -23,6 +23,7 @@ import { updateLocationService } from "../../services/Customer/customerprofile.s
 import Location from "../../models/Customer/customerLocation.mode.js";
 import { sendMessage } from "../../utils/sendMessage.js";
 import { handleReferralFlow } from "../../services/Customer/referral.service.js";
+import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

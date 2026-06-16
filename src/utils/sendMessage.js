@@ -1,24 +1,20 @@
 import axios from "axios";
 export const sendMessage = async ({ mobile, message, template_id }) => {
   try {
-    const response = await axios.post(
-      process.env.COMBIRDS_API_URL,
-      {
-        mobile: mobile,
-        message: message,
-        sender_id: process.env.COMBIRDS_SENDER_ID,
-        template_id: template_id,
-      },
-      {
-        headers: {
-          Authorization: process.env.COMBIRDS_API_KEY,
-          "Content-Type": "application/json",
-        },
-      },
+    console.log(
+      "Sending message to:",
+      mobile,
+      "with template ID:",
+      template_id,
     );
+    const sender_id = process.env.SMS_SENDER_ID;
+    const username = process.env.SMS_USERNAME;
+    const password = process.env.SMS_PASSWORD;
+    const smsApiUrl = `https://www.smsjust.com/blank/sms/user/urlsms.php?username=${username}&pass=${password}&senderid=${sender_id}&dest_mobileno=${mobile}&message=${encodeURIComponent(message)}&dlttempid=${template_id}&response=Y`;
+    const response = await axios.post(smsApiUrl);
 
-    console.log(response.data);
+    console.log("sms response", response?.data);
   } catch (error) {
-    // console.log(error.response?.data || error.message);
+    console.log(error.response?.data || error.message);
   }
 };

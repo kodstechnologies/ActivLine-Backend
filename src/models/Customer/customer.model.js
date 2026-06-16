@@ -239,8 +239,6 @@ const customerSchema = new mongoose.Schema(
       code: {
         type: String,
         index: true,
-        unique: true, // optional but recommended
-        sparse: true, // important if using unique
         trim: true,
       },
       referredCount: {

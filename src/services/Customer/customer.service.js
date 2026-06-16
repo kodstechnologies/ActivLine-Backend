@@ -254,12 +254,16 @@ export const createCustomerService = async (payload, files) => {
   // 🎯 Fetch Jaze profile by phone synchronously to extract their assigned referral code
   let ownReferralCode = null;
   const profileResponse = await getProfileByPhone(payload.phoneNumber);
+  console.log(
+    "Fetched profile response for referral code extraction:",
+    profileResponse?.[0]?.[0]?.UserSetting,
+  );
   const profileData = Array.isArray(profileResponse?.data)
     ? profileResponse.data[0]
     : profileResponse?.data || profileResponse;
   console.log(
     "Fetched profile data for referral code extraction:",
-    profileData?.[0]?.[0]?.UserSetting?.referral_code,
+    profileData?.[0]?.[0]?.UserSetting,
   );
   ownReferralCode = profileData?.[0]?.[0]?.UserSetting?.referral_code || "";
 
@@ -298,7 +302,7 @@ export const createCustomerService = async (payload, files) => {
   if (ownReferralCode) {
     referralData.code = ownReferralCode;
   }
-  console.log("Referral data for new customer:", referralData, ownReferralCode);
+  console.log("Referral data for new customer:", ownReferralCode);
   const savedCustomer = await createCustomerRepo({
     // Customer own refer code
     referral: {
@@ -446,7 +450,7 @@ export const createCustomerService = async (payload, files) => {
       referralCompleted: false,
     });
   }
-  console.log("✅ Created customer:", savedCustomer);
+  // console.log("✅ Created customer:", savedCustomer);
   return {
     customer: savedCustomer,
     credentials: {
