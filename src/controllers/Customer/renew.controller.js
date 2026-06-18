@@ -158,7 +158,7 @@ export const renew = asyncHandler(async (req, res) => {
 
           const { ID, MESSAGE } = SMS_TEMPLATE_ID.RENEWAL_NEW(
             customer.userName || "Customer",
-            "Activline Internet",
+            `Activline Internet for Rs. ${planAmount}`,
             new Date().toLocaleDateString(),
             "Activline Team"
           );
