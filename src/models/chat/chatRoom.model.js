@@ -42,6 +42,11 @@ lastMessageAt: {
     default: null,
   },
 
+  lastOverdueSmsSentAt: {
+    type: Date,
+    default: null,
+  },
+
   isConnectedToAgent: {
     type: Boolean,
     default: false,

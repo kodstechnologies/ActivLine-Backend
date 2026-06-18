@@ -128,13 +128,21 @@ export const startAgentAvailabilityCron = () => {
   // Run once every hour to check for overdue support tickets and send SLA SMS alerts
   cron.schedule("0 * * * *", async () => {
     try {
-      const SLA_LIMIT = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+      const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const ONE_MONTH_AGO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      // Find tickets open for > 7 days, haven't been warned in 7 days, and are newer than 30 days
       const overdueTickets = await ChatRoom.find({
         status: { $in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] },
-        updatedAt: { $lt: SLA_LIMIT },
+        createdAt: { $gte: ONE_MONTH_AGO }, 
+        $or: [
+          { lastOverdueSmsSentAt: { $exists: false }, createdAt: { $lte: SEVEN_DAYS_AGO } },
+          { lastOverdueSmsSentAt: null, createdAt: { $lte: SEVEN_DAYS_AGO } },
+          { lastOverdueSmsSentAt: { $lte: SEVEN_DAYS_AGO } }
+        ]
       }).populate("customer");
 
-      console.log(`[CRON] Found ${overdueTickets.length} overdue support tickets to notify.`);
+      console.log(`[CRON] Found ${overdueTickets.length} overdue support tickets to notify (7-day SLA loop).`);
 
       for (const ticket of overdueTickets) {
         if (ticket.customer?.phoneNumber) {
@@ -149,9 +157,14 @@ export const startAgentAvailabilityCron = () => {
               message: MESSAGE,
               template_id: ID,
             });
-            console.log(`[CRON] Overdue ticket SMS sent to ${ticket.customer.phoneNumber} for ticket ${ticket._id}`);
+            console.log(`[CRON] 7-Day SLA ticket SMS sent to ${ticket.customer.phoneNumber} for ticket ${ticket._id}`);
+
+            // Reset the 7-day timer tracker after a successful SMS send
+            await ChatRoom.findByIdAndUpdate(ticket._id, {
+              lastOverdueSmsSentAt: new Date(),
+            });
           } catch (smsErr) {
-            console.error(`[CRON] Failed to send overdue ticket SMS for ${ticket._id}:`, smsErr.message);
+            console.error(`[CRON] Failed to send 7-Day SLA ticket SMS for ${ticket._id}:`, smsErr.message);
           }
         }
       }
