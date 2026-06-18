@@ -303,7 +303,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
           (async () => {
             try {
               const { ID, MESSAGE } = SMS_TEMPLATE_ID.GRANT_ACCESS(
-                result.credentials.userName,
+                result.credentials.userName || "",
                 result.credentials.password,
                 new Date().toLocaleDateString(),
                 "N/A",

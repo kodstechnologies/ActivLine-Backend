@@ -4,7 +4,10 @@ import { renewUserPlan } from "../../services/Customer/renew.service.js";
 import Customer from "../../models/Customer/customer.model.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 import { notifyCustomer } from "../../services/Notification/customer.notification.service.js";
-import { getProfileDetails, getUserByUsername } from "../../external/activline/activline.profile.api.js";
+import {
+  getProfileDetails,
+  getUserByUsername,
+} from "../../external/activline/activline.profile.api.js";
 import { sendMessage } from "../../utils/sendMessage.js";
 import { fetchProfilesWithDetailsByFranchise } from "../../services/franchise/profile.service.js";
 import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
@@ -81,7 +84,10 @@ export const renew = asyncHandler(async (req, res) => {
 
       if (customer?._id) {
         await resetUsageHistory(customer._id).catch((resetErr) => {
-          console.error("Failed to reset customer data usage history on renew:", resetErr.message);
+          console.error(
+            "Failed to reset customer data usage history on renew:",
+            resetErr.message,
+          );
         });
       }
 
@@ -122,7 +128,7 @@ export const renew = asyncHandler(async (req, res) => {
                   profileId: String(userId),
                 },
               );
-              
+
               const profilesList =
                 profileResult?.items ||
                 profileResult?.profiles ||
@@ -130,10 +136,11 @@ export const renew = asyncHandler(async (req, res) => {
                 [];
 
               const matchedProfile = profilesList.find(
-                (p) => String(p?.Profile?.id || p?.id || "") === String(userId)
+                (p) => String(p?.Profile?.id || p?.id || "") === String(userId),
               );
 
-              const details = matchedProfile?.details || profileResult?.item?.details || {};
+              const details =
+                matchedProfile?.details || profileResult?.item?.details || {};
               const billingRows = details?.["billing Details"] || [];
               const totalPriceRow = billingRows.find(
                 (row) =>
@@ -158,7 +165,7 @@ export const renew = asyncHandler(async (req, res) => {
 
           const { ID, MESSAGE } = SMS_TEMPLATE_ID.RENEWAL_NEW(
             customer.userName || "Customer",
-            `Activline Internet for Rs. ${planAmount}`,
+            `Internet Rs.${planAmount}`,
             new Date().toLocaleDateString(),
             "Activline Team"
           );
