@@ -1,7 +1,7 @@
 export const SMS_TEMPLATE_ID = {
   WELCOM_SMS: () => ({
     ID: "1507165416428327948",
-    MESSAGE: `Dear Customer Welcome to Activline Telecom, Your account has been registered with us. Helpline 24*7 For any details Contact: / 18002586488 / 08049796488 Whatsapp no. 9535996488 / 9972356488 Please feel free to contact our service, Regards ATPL`,
+    MESSAGE: `Dear Customer Welcome to Activline Telecom, Your account has been registered with us. Helpline 24*7 For any details Contact: / 18002586488 / 08049796488 Whatsapp no. 9535996488 / 9972356488Please feel free to contact our service, Regards ATPL`,
   }),
 
   OTP_SMS: (OTP, EXPIRE) => ({
@@ -10,9 +10,9 @@ export const SMS_TEMPLATE_ID = {
       `Your OTP is ${OTP}. It is valid for ${EXPIRE} minutes. Please do not share this code with anyone.`,
   }),
 
-  ACCOUNT_SUSPENDED: () => ({
+  ACCOUNT_SUSPENDED: (AMOUNT) => ({
     ID: "1507165466838223337",
-    MESSAGE: `Your account has been suspended. Please contact our support team for further assistance.`,
+    MESSAGE: `Your account has been suspended due to non-payment of bill. Please pay your bill of ${AMOUNT} immediately to re-activate your account. Regards ATPL`,
   }),
 
   EXPIRE_NOTIFY: (EXPIRY, PAYMENT_LINK) => ({
@@ -32,7 +32,7 @@ export const SMS_TEMPLATE_ID = {
 
   PAYMENT_REMINDER_NEW: (EXPIRY_DATE, PAYMENT_LINK, UTILS_LINK) => ({
     ID: "1007405859397964549",
-    MESSAGE: `Dear Sir/Madam, Your plan will expire on ${EXPIRY_DATE}  to continue with uninterrupted services, Kindly recharge Online recharge procedure: check account details, payment process, invoice, etc., in the below URL.  Kindly make payment through the below-mentioned link only. ${PAYMENT_LINK}${UTILS_LINK} , Kindly ignore, if already paid - Activline`,
+    MESSAGE: `Dear Sir/Madam,   Your plan will expire on ${EXPIRY_DATE}  to continue with uninterrupted services, Kindly recharge Online recharge procedure: check account details, payment process, invoice, etc., in the below URL.  Kindly make payment through the below-mentioned link only. ${PAYMENT_LINK}${UTILS_LINK} , Kindly ignore, if already paid - Activline`,
   }),
 
   MAINTENANCE_ACTIVITY_NOTIFICATION: (DATE, TIME_RANGE) => ({
