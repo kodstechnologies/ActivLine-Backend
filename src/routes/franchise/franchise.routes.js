@@ -15,6 +15,10 @@ import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 import { getReportSummary } from "../../controllers/Admin/Dashboard/dashboard.controller.js";
 import { getFranchiseCustomerCount } from "../../controllers/franchise/customerCount.controller.js";
+import {
+  createOrUpdateTariff,
+  getTariffByFranchiseId,
+} from "../../controllers/Admin/settings/franchiseTariff.controller.js";
 
 const router = Router();
 
@@ -50,5 +54,15 @@ router.put(
   allowRoles("ADMIN", "SUPER_ADMIN", "FRANCHISE_ADMIN"),
   updateFranchiseAvailability,
 );
+
+// Tariff configurations
+router.post(
+  "/tariff",
+  verifyJWT,
+  // allowRoles(ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.FRANCHISE_ADMIN),
+  createOrUpdateTariff,
+);
+
+router.get("/tariff/:franchiseId", getTariffByFranchiseId);
 
 export default router;
