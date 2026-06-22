@@ -68,7 +68,16 @@ app.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({
       success: false,
-      message: "File too large. Maximum file size is 500MB",
+      message: "File too large. Maximum file size is 50MB", // Adjusted to match multer 50MB limit in routes
+      data: null,
+    });
+  }
+
+  // Handle body parser size limit errors
+  if (err.status === 413 || err.statusCode === 413 || err.type === "entity.too.large") {
+    return res.status(413).json({
+      success: false,
+      message: "Payload too large. Maximum size limit is 20MB",
       data: null,
     });
   }
