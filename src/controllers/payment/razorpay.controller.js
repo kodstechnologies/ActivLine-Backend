@@ -873,8 +873,8 @@ export const verifyPlanPayment = async (req, res, next) => {
 
     if (!paidByPatch && bodyUserName) {
       paidByPatch = {
-        paidByUserName: bodyUserName,
-        paidByName: bodyUserName,
+        paidByUserName: bodyUserName?.trim(),
+        paidByName: bodyUserName?.trim(),
       };
     }
 
