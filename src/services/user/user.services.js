@@ -17,7 +17,15 @@ class AuthService {
     return user;
   }
 
-   async loginUser(identifier, password) {
+  async checkUserExists({ emailId, phoneNumber }) {
+    const user = await userRepo.findByEmailOrMobile(emailId, phoneNumber);
+    if (user) {
+      throw new ApiError(409, "User already exists");
+    }
+    return true;
+  }
+
+  async loginUser(identifier, password) {
     let user;
 
     if (/^[6-9]\d{9}$/.test(identifier)) {

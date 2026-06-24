@@ -11,3 +11,8 @@ export const loginSchema = Joi.object({
   identifier: Joi.string().required(), // mobile OR customerId
   password: Joi.string().required(),
 });
+
+export const checkUserSchema = Joi.object({
+  email: Joi.string().email().optional(),
+  phone: Joi.string().pattern(/^[6-9]\d{9}$/).optional(),
+}).or("email", "phone");
