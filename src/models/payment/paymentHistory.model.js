@@ -97,6 +97,7 @@ const paymentHistorySchema = new mongoose.Schema(
       type: String,
       default: null,
       trim: true,
+      index: true,
     },
     paidByEmail: {
       type: String,
