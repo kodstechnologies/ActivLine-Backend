@@ -329,8 +329,10 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
   const normalizedProfileId = normalizeText(profileId);
   const normalizedGroupId = normalizeText(groupId);
 
-  if (normalizedAccountId) {
-    const found = await Customer.findOne({ accountId: normalizedAccountId })
+  if (normalizedProfileId) {
+    const found = await Customer.findOne({
+      activlineUserId: normalizedProfileId,
+    })
       .select(
         "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
       )
@@ -339,10 +341,8 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
     if (found) return found;
   }
 
-  if (normalizedProfileId) {
-    const found = await Customer.findOne({
-      activlineUserId: normalizedProfileId,
-    })
+  if (normalizedAccountId) {
+    const found = await Customer.findOne({ accountId: normalizedAccountId })
       .select(
         "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
       )
@@ -433,11 +433,11 @@ const buildCustomerResolver = async (paymentDocs) => {
     const profileId = normalizeText(payment.profileId);
 
     const customer =
-      (accountId && byAccountId.get(accountId)) ||
       (profileId && byActivlineUserId.get(profileId)) ||
       (groupId && byGroupId.get(groupId)) ||
-      (groupId && byAccountId.get(groupId)) ||
+      (accountId && byAccountId.get(accountId)) ||
       (groupId && byActivlineUserId.get(groupId)) ||
+      (groupId && byAccountId.get(groupId)) ||
       null;
 
     return toCustomerSnapshot(customer);
@@ -478,6 +478,18 @@ const mapPaymentHistoryDoc = (doc, customer) => {
         )
       : null;
 
+  const userName =
+    obj.paidByUserName ||
+    paidBy?.userName ||
+    resolvedCustomer?.userName ||
+    null;
+
+  const phoneNumber =
+    obj.paidByPhone ||
+    paidBy?.phoneNumber ||
+    resolvedCustomer?.phoneNumber ||
+    null;
+
   return {
     paymentId: String(doc._id),
     orderId: obj.razorpayOrderId,
@@ -496,6 +508,8 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
     updatedAt: obj.updatedAt,
+    userName,
+    phoneNumber,
     customer: resolvedCustomer,
     paidBy,
     plan: {
@@ -768,13 +782,41 @@ export const createPlanOrder = async (req, res, next) => {
       
       if (targetCustomer) {
         customerDoc = targetCustomer;
-        paidByPatch = toPaidBySnapshot(targetCustomer);
+        // Always prefer DB phone; supplement with body phone if not stored yet
+        paidByPatch = {
+          paidByCustomerId: targetCustomer._id || null,
+          paidByUserName: targetCustomer.userName || bodyUserName,
+          paidByName: targetCustomer.userName || bodyUserName,
+          paidByPhone: targetCustomer.phoneNumber || bodyPhone || null,
+          paidByEmail: targetCustomer.emailId || null,
+        };
       } else {
-        // User not in DB yet — save whatever we have from request body
+        // User not in DB yet — save whatever we have from request body (pre-registration)
         paidByPatch = {
           paidByUserName: bodyUserName,
           paidByName: bodyUserName,
           paidByPhone: bodyPhone || null,
+        };
+      }
+    } else if (bodyPhone) {
+      // ── FLOW 1: Pre-registration ── Only phone provided, no username yet.
+      // Try to find an existing customer by phone number.
+      const phoneCustomer = await Customer.findOne({ phoneNumber: bodyPhone })
+        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .lean();
+      if (phoneCustomer) {
+        customerDoc = phoneCustomer;
+        paidByPatch = {
+          paidByCustomerId: phoneCustomer._id || null,
+          paidByUserName: phoneCustomer.userName || null,
+          paidByName: phoneCustomer.userName || null,
+          paidByPhone: bodyPhone,
+          paidByEmail: phoneCustomer.emailId || null,
+        };
+      } else {
+        // Completely new user — store phone so history can be found later
+        paidByPatch = {
+          paidByPhone: bodyPhone,
         };
       }
     } else if (req.user?._id) {
@@ -787,23 +829,25 @@ export const createPlanOrder = async (req, res, next) => {
       paidByPatch = toPaidBySnapshot(authCustomer);
     }
 
+    // resolveCustomerForPayment is ONLY used for customerDoc (plan owner, for the response).
+    // It must NEVER set paidByPatch — otherwise a random previous customer's username
+    // gets stored as the payer when no userName/phoneNumber was passed in the body.
     if (!customerDoc) {
       const resolvedCustomer = await resolveCustomerForPayment(
         finalAccountId,
         finalGroupId,
         profileId,
       );
-      customerDoc = resolvedCustomer || customerDoc;
+      // Only store as customerDoc (response context), NOT as paidByPatch
+      customerDoc = resolvedCustomer || null;
     }
 
-    if (!paidByPatch && customerDoc) {
-      paidByPatch = toPaidBySnapshot(customerDoc);
-    }
-
+    // paidByPatch must only come from explicit body fields (userName or phoneNumber)
+    // or from the authenticated JWT user. NEVER auto-resolve from plan ownership.
     if (!paidByPatch) {
       return res.status(400).json({
         success: false,
-        message: "userName is required",
+        message: "userName or phoneNumber is required",
       });
     }
 
@@ -877,7 +921,7 @@ export const verifyPlanPayment = async (req, res, next) => {
     const existingPayment = await PaymentHistory.findOne({
       razorpayOrderId: razorpay_order_id,
     })
-      .select("accountId groupId profileId")
+      .select("accountId groupId profileId paidByCustomerId paidByUserName paidByName paidByPhone paidByEmail")
       .lean();
 
     const resolvedAccountId =
@@ -907,13 +951,41 @@ export const verifyPlanPayment = async (req, res, next) => {
       }).select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId").lean();
       
       if (targetCustomer) {
-        paidByPatch = toPaidBySnapshot(targetCustomer);
+        paidByPatch = {
+          paidByCustomerId: targetCustomer._id || null,
+          paidByUserName: targetCustomer.userName || bodyUserName?.trim() || null,
+          paidByName: targetCustomer.userName || bodyUserName?.trim() || null,
+          // Always store phone — prefer DB value, supplement with body value
+          paidByPhone: targetCustomer.phoneNumber || bodyPhone || null,
+          paidByEmail: targetCustomer.emailId || req.body?.email || req.body?.customer?.email || null,
+        };
       } else {
-        // User not in DB yet — save phone from body so history can be found later
+        // User not in DB yet — save phone from body so history can be found later (pre-registration)
         paidByPatch = {
           paidByUserName: bodyUserName?.trim(),
           paidByName: bodyUserName?.trim(),
           paidByPhone: bodyPhone || null,
+          paidByEmail: req.body?.email || req.body?.customer?.email || null,
+        };
+      }
+    } else if (bodyPhone) {
+      // ── FLOW 1: Pre-registration ── Only phone provided, no username yet.
+      const phoneCustomer = await Customer.findOne({ phoneNumber: bodyPhone })
+        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .lean();
+      if (phoneCustomer) {
+        paidByPatch = {
+          paidByCustomerId: phoneCustomer._id || null,
+          paidByUserName: phoneCustomer.userName || null,
+          paidByName: phoneCustomer.userName || null,
+          paidByPhone: bodyPhone,
+          paidByEmail: phoneCustomer.emailId || null,
+        };
+      } else {
+        // Brand-new user — store phone so history is retrievable by phone later
+        paidByPatch = {
+          paidByPhone: bodyPhone,
+          paidByEmail: req.body?.email || req.body?.customer?.email || null,
         };
       }
     } else if (req.user?._id) {
@@ -925,22 +997,25 @@ export const verifyPlanPayment = async (req, res, next) => {
       paidByPatch = toPaidBySnapshot(authCustomer);
     }
 
+    // If no identity came from the body/auth, check what was already saved
+    // during createPlanOrder — userName/phone were stored then, no need to re-send.
     if (!paidByPatch) {
-      const resolvedCustomer = await resolveCustomerForPayment(
-        resolvedAccountId,
-        resolvedGroupId,
-        resolvedProfileId,
-      );
-      if (resolvedCustomer) {
-        paidByPatch = toPaidBySnapshot(resolvedCustomer);
-      }
-    }
+      const hasStoredIdentity =
+        existingPayment?.paidByPhone ||
+        existingPayment?.paidByUserName ||
+        existingPayment?.paidByCustomerId;
 
-    if (!paidByPatch) {
-      return res.status(400).json({
-        success: false,
-        message: "userName is required",
-      });
+      if (hasStoredIdentity) {
+        // Identity was already saved during createPlanOrder — nothing new to write.
+        // Set paidByPatch to empty object so the update proceeds without overwriting.
+        paidByPatch = {};
+      } else {
+        // Truly no identity at all — cannot proceed.
+        return res.status(400).json({
+          success: false,
+          message: "userName or phoneNumber is required",
+        });
+      }
     }
 
     if (!isValid) {
@@ -984,6 +1059,18 @@ export const verifyPlanPayment = async (req, res, next) => {
     const responseData = updated
       ? mapPaymentHistoryDoc(updated, resolveCustomer(updated))
       : null;
+
+    if (responseData) {
+      responseData.customer = {
+        customerId: responseData.customer?.customerId || null,
+        userName: bodyUserName || null,
+        accountId: resolvedAccountId || null,
+        groupId: resolvedGroupId || null,
+        name: bodyUserName || null,
+        phoneNumber: bodyPhone || null,
+        email: req.body?.email || req.body?.customer?.email || null,
+      };
+    }
 
     if (responseData?.planEndDate && resolvedProfileId) {
       const d = new Date(responseData.planEndDate);
@@ -1381,7 +1468,7 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
     const fromDate = req.query.fromDate?.trim();
     const toDate = req.query.toDate?.trim();
     const profileId = req.query.profileId?.trim();
-    const phoneNumber = req.query.phoneNumber?.trim();
+    const phoneNumber = (req.query.phoneNumber || req.body?.phoneNumber || req.body?.phone)?.trim();
 
     // Optional customer lookup for response mapping (doesn't control filtering).
     const customer = await Customer.findOne({
@@ -1494,7 +1581,7 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
         fromDate: fromDate || null,
         toDate: toDate || null,
         profileId: profileId || null,
-        phoneNumber: phoneNumber || null,
+        phoneNumber: phoneNumber || customer?.phoneNumber || null,
         userName: bodyUserName,
       },
       summary: statusSummary,
@@ -1580,7 +1667,7 @@ export const getCurrentPlanPaymentHistoryByCustomerUserName = async (
           fromDate: req.query.fromDate?.trim() || null,
           toDate: req.query.toDate?.trim() || null,
           profileId: req.query.profileId?.trim() || null,
-          phoneNumber: req.query.phoneNumber?.trim() || null,
+          phoneNumber: req.query.phoneNumber?.trim() || customer?.phoneNumber || null,
         },
       });
     }
@@ -2184,10 +2271,170 @@ export const getSinglePlanPaymentDetails = async (req, res, next) => {
     }
 
     const resolveCustomer = await buildCustomerResolver([payment]);
+    const mapped = mapPaymentHistoryDoc(payment, resolveCustomer(payment));
+
+    // Enrich paidBy: if paidByPhone is stored but no customerId linked yet,
+    // attempt a live lookup so the payer identity is as complete as possible.
+    const payObj = payment.toObject ? payment.toObject() : payment;
+    if (payObj.paidByPhone && !payObj.paidByCustomerId) {
+      const payerByPhone = await Customer.findOne({ phoneNumber: payObj.paidByPhone })
+        .select("_id userName firstName lastName phoneNumber emailId")
+        .lean();
+      if (payerByPhone && mapped.paidBy) {
+        mapped.paidBy.customerId = String(payerByPhone._id);
+        mapped.paidBy.userName = mapped.paidBy.userName || payerByPhone.userName || null;
+        mapped.paidBy.name = mapped.paidBy.name || payerByPhone.userName || null;
+        mapped.paidBy.email = mapped.paidBy.email || payerByPhone.emailId || null;
+      } else if (payerByPhone && !mapped.paidBy) {
+        mapped.paidBy = {
+          customerId: String(payerByPhone._id),
+          userName: payerByPhone.userName || null,
+          name: payerByPhone.userName || null,
+          phoneNumber: payObj.paidByPhone,
+          email: payerByPhone.emailId || null,
+        };
+      }
+      // Keep top-level userName/phoneNumber consistent with paidBy
+      if (!mapped.userName && mapped.paidBy?.userName) {
+        mapped.userName = mapped.paidBy.userName;
+      }
+    }
 
     return res.status(200).json({
       success: true,
-      data: mapPaymentHistoryDoc(payment, resolveCustomer(payment)),
+      data: mapped,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// ── NEW: Get payment history by phone number (works for both flows) ──────────
+// Flow 1 (pre-registration): payment made with phone only → find by paidByPhone
+// Flow 2 (post-registration): customer exists → also match by username/customerId
+export const getPaymentHistoryByPhone = async (req, res, next) => {
+  try {
+    const phoneParam = normalizeText(
+      req.query.phoneNumber || req.query.phone || req.body?.phoneNumber || req.body?.phone,
+    );
+
+    if (!phoneParam) {
+      return res.status(400).json({
+        success: false,
+        message: "phoneNumber is required",
+      });
+    }
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+    const planName = req.query.planName?.trim();
+    const status = req.query.status?.trim();
+    const date = req.query.date?.trim();
+    const fromDate = req.query.fromDate?.trim();
+    const toDate = req.query.toDate?.trim();
+
+    // Try to find a registered customer with this phone number
+    const customer = await Customer.findOne({ phoneNumber: phoneParam })
+      .select("_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId")
+      .lean();
+
+    // Build $or to catch ALL payments linked to this phone:
+    //   1. paidByPhone field (pre-registration & post-registration)
+    //   2. paidByCustomerId (if registered customer found)
+    //   3. paidByUserName / paidByName (if registered customer found)
+    const orClauses = [
+      { paidByPhone: { $regex: `^${escapeRegex(phoneParam)}$`, $options: "i" } },
+    ];
+    if (customer?._id) {
+      orClauses.push({ paidByCustomerId: customer._id });
+      if (customer.userName) {
+        const unRegex = { $regex: `^${escapeRegex(customer.userName)}$`, $options: "i" };
+        orClauses.push({ paidByUserName: unRegex });
+        orClauses.push({ paidByName: unRegex });
+      }
+    }
+
+    const query = { $or: orClauses };
+
+    if (planName) query.planName = { $regex: planName, $options: "i" };
+    if (status) {
+      const upperStatus = status.toUpperCase();
+      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+        query.status = upperStatus;
+      }
+    }
+    if (date || fromDate || toDate) {
+      query.createdAt = {};
+      if (date) {
+        const start = new Date(date); start.setHours(0, 0, 0, 0);
+        const end = new Date(date); end.setHours(23, 59, 59, 999);
+        query.createdAt.$gte = start;
+        query.createdAt.$lte = end;
+      } else {
+        if (fromDate) query.createdAt.$gte = new Date(fromDate);
+        if (toDate) {
+          const end = new Date(toDate); end.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = end;
+        }
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [items, total, summaryRows, totalsRow] = await Promise.all([
+      PaymentHistory.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentHistory.countDocuments(query),
+      PaymentHistory.aggregate([
+        { $match: query },
+        { $group: { _id: "$status", count: { $sum: 1 } } },
+      ]),
+      PaymentHistory.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: { $ifNull: ["$planAmount", 0] } },
+            pendingCount: { $sum: { $cond: [{ $eq: ["$status", "PENDING"] }, 1, 0] } },
+            notPaidCount: { $sum: { $cond: [{ $ne: ["$status", "SUCCESS"] }, 1, 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const statusSummary = { PENDING: 0, SUCCESS: 0, FAILED: 0 };
+    for (const row of summaryRows) {
+      if (statusSummary[row._id] !== undefined) statusSummary[row._id] = row.count;
+    }
+
+    const resolveCustomer = await buildCustomerResolver(items);
+    const totals = totalsRow?.[0] || { totalAmount: 0, pendingCount: 0, notPaidCount: 0 };
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      filters: {
+        phoneNumber: phoneParam,
+        userName: customer?.userName || null,
+        planName: planName || null,
+        status: status || null,
+        date: date || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+      },
+      summary: statusSummary,
+      totals: {
+        totalPaymentAmount: totals.totalAmount,
+        pendingPaymentCount: totals.pendingCount,
+        notPaidPaymentCount: totals.notPaidCount,
+      },
+      data: items.map((item) => {
+        const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+        return rest;
+      }),
     });
   } catch (error) {
     return next(error);

@@ -11,6 +11,7 @@ import {
   verifyPlanPayment,
   getPlanPaymentHistoryByGroup,
   getSinglePlanPaymentDetails,
+  getPaymentHistoryByPhone,
   getMyPlanPaymentHistory,
   getMySinglePlanPaymentDetails,
   getMyLatestPlanPaymentHistory,
@@ -57,6 +58,8 @@ router.post("/plans/verify-payment", verifyPlanPayment);
 // Payment history APIs
 router.get("/plans/group/:groupId/payment-history", getPlanPaymentHistoryByGroup);
 router.get("/plans/payment-history", getPlanPaymentHistoryByGroup);
+// Get all payment history for a specific phone number (pre- and post-registration)
+router.get("/plans/payment-history/by-phone", getPaymentHistoryByPhone);
 router.get("/plans/payment-history/:paymentId", getSinglePlanPaymentDetails);
 
 // Customer own payment history APIs

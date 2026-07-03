@@ -3,6 +3,7 @@ import {
   getPaymentHistoryByCustomerId,
   getPaymentHistoryByCustomerUserName,
   getCurrentPlanPaymentHistoryByCustomerUserName,
+  getPaymentHistoryByPhone,
 } from "../../controllers/payment/razorpay.controller.js";
 import { getCustomerTickets } from "../../controllers/Admin/customer.ticket.controller.js";
 import { downloadAdminCustomerDetailsPdf } from "../../controllers/Admin/customerDetailsPdf.controller.js";
@@ -30,6 +31,14 @@ router.post(
   verifyJWT,
   allowRoles("ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
   getCurrentPlanPaymentHistoryByCustomerUserName
+);
+
+// Get payment history by phone number (covers both pre- and post-registration payments)
+router.get(
+  "/customers/payment-history/by-phone",
+  verifyJWT,
+  allowRoles("ADMIN", "FRANCHISE_ADMIN", "ADMIN_STAFF"),
+  getPaymentHistoryByPhone
 );
 
 router.get(
