@@ -292,6 +292,7 @@ const toCustomerSnapshot = (customer) => {
       name: null,
       phoneNumber: null,
       email: null,
+      expirationDate: null,
     };
   }
 
@@ -306,6 +307,7 @@ const toCustomerSnapshot = (customer) => {
     name: customer.userName || fullName || null,
     phoneNumber: customer.phoneNumber || null,
     email: customer.emailId || null,
+    expirationDate: customer.expirationDate || null,
   };
 };
 
@@ -334,7 +336,7 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
       activlineUserId: normalizedProfileId,
     })
       .select(
-        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
       )
       .sort({ updatedAt: -1 })
       .lean();
@@ -344,7 +346,7 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
   if (normalizedAccountId) {
     const found = await Customer.findOne({ accountId: normalizedAccountId })
       .select(
-        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
       )
       .sort({ updatedAt: -1 })
       .lean();
@@ -355,7 +357,7 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
   if (Number.isFinite(numericGroupId)) {
     const found = await Customer.findOne({ userGroupId: numericGroupId })
       .select(
-        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
       )
       .sort({ updatedAt: -1 })
       .lean();
@@ -365,7 +367,7 @@ const resolveCustomerForPayment = async (accountId, groupId, profileId) => {
   if (normalizedGroupId) {
     const found = await Customer.findOne({ userGroupId: normalizedGroupId })
       .select(
-        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+        "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
       )
       .sort({ updatedAt: -1 })
       .lean();
@@ -405,7 +407,7 @@ const buildCustomerResolver = async (paymentDocs) => {
     ],
   })
     .select(
-      "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+      "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
     )
     .sort({ updatedAt: -1 })
     .lean();
@@ -470,10 +472,22 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     accountId: resolvedAccountId,
   };
   const baseDate = obj.paidAt || obj.createdAt || null;
-  const planEndDate =
-    baseDate && periodDays
+
+  const planStartDate = obj.planDetails?.calculatedStartDate
+    ? new Date(obj.planDetails.calculatedStartDate)
+    : baseDate
+      ? new Date(baseDate)
+      : null;
+
+  // Use planStartDate (not baseDate/paidAt) so that the fallback end-date
+  // always equals "plan start + plan period", never "payment date + plan period".
+  // Without this, if calculatedEndDate is missing, planEndDate could equal
+  // the recharge/payment date when periodDays is falsy/undefined.
+  const planEndDate = obj.planDetails?.calculatedEndDate
+    ? new Date(obj.planDetails.calculatedEndDate)
+    : planStartDate && periodDays
       ? new Date(
-          new Date(baseDate).getTime() +
+          planStartDate.getTime() +
             Number(periodDays) * 24 * 60 * 60 * 1000,
         )
       : null;
@@ -504,6 +518,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
     profileId: obj.profileId,
     planName: resolvedPlanName,
     planPeriodDays: periodDays,
+    planStartDate: planStartDate ? planStartDate.toISOString() : null,
     planEndDate: planEndDate ? planEndDate.toISOString() : null,
     paidAt: obj.paidAt,
     createdAt: obj.createdAt,
@@ -517,6 +532,7 @@ const mapPaymentHistoryDoc = (doc, customer) => {
       planName: resolvedPlanName,
       planAmount: obj.planAmount,
       planPeriodDays: periodDays,
+      planStartDate: planStartDate ? planStartDate.toISOString() : null,
       planEndDate: planEndDate ? planEndDate.toISOString() : null,
       billingPlanId: billingMeta.billingPlanId,
       totalPrice: billingMeta.totalPrice,
@@ -948,7 +964,7 @@ export const verifyPlanPayment = async (req, res, next) => {
       // Try to find existing customer by username in local DB
       const targetCustomer = await Customer.findOne({
         userName: { $regex: `^${escapeRegex(bodyUserName)}$`, $options: "i" }
-      }).select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId").lean();
+      }).select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate").lean();
       
       if (targetCustomer) {
         paidByPatch = {
@@ -971,7 +987,7 @@ export const verifyPlanPayment = async (req, res, next) => {
     } else if (bodyPhone) {
       // ── FLOW 1: Pre-registration ── Only phone provided, no username yet.
       const phoneCustomer = await Customer.findOne({ phoneNumber: bodyPhone })
-        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId")
+        .select("userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate")
         .lean();
       if (phoneCustomer) {
         paidByPatch = {
@@ -991,7 +1007,7 @@ export const verifyPlanPayment = async (req, res, next) => {
     } else if (req.user?._id) {
       const authCustomer = await Customer.findById(req.user._id)
         .select(
-          "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId",
+          "userName firstName lastName phoneNumber emailId accountId userGroupId activlineUserId expirationDate",
         )
         .lean();
       paidByPatch = toPaidBySnapshot(authCustomer);
@@ -1038,6 +1054,53 @@ export const verifyPlanPayment = async (req, res, next) => {
       });
     }
 
+    // Fetch customer's current expirationDate
+    let currentExpirationDate = null;
+    if (resolvedProfileId) {
+      const customerForExp = await Customer.findOne({ activlineUserId: resolvedProfileId }).select("expirationDate").lean();
+      currentExpirationDate = customerForExp?.expirationDate || null;
+    } else {
+      const resolvedCustomer = await resolveCustomerForPayment(resolvedAccountId, resolvedGroupId, resolvedProfileId);
+      currentExpirationDate = resolvedCustomer?.expirationDate || null;
+    }
+
+    const tempPayment = await PaymentHistory.findOne({ razorpayOrderId: razorpay_order_id }).select("planDetails").lean();
+    const periodDays = extractPlanPeriodDays(tempPayment?.planDetails || {}) || 30;
+
+    const baseDate = new Date();
+    let start = baseDate;
+    if (currentExpirationDate) {
+      const currentExp = new Date(currentExpirationDate);
+      if (!Number.isNaN(currentExp.getTime()) && currentExp.getTime() > start.getTime()) {
+        start = currentExp;
+      }
+    }
+
+    const calculatedEndDate = start && periodDays
+      ? new Date(start.getTime() + Number(periodDays) * 24 * 60 * 60 * 1000)
+      : null;
+
+    const formattedStartDate = start ? `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}` : null;
+    const formattedEndDate = calculatedEndDate ? `${calculatedEndDate.getFullYear()}-${String(calculatedEndDate.getMonth() + 1).padStart(2, "0")}-${String(calculatedEndDate.getDate()).padStart(2, "0")}` : null;
+
+    // ── Build a safe planDetails object ──────────────────────────────────────
+    // If createPlanOrder stored an error string (e.g. "Invalid ProfileId")
+    // instead of an object, MongoDB's dot-notation $set would throw:
+    //   "Cannot create field 'calculatedEndDate' in element {planDetails: <str>}"
+    // We coerce planDetails to a plain object before merging calculated dates.
+    const existingPlanDetails =
+      tempPayment?.planDetails !== null &&
+      typeof tempPayment?.planDetails === "object" &&
+      !Array.isArray(tempPayment?.planDetails)
+        ? tempPayment.planDetails
+        : {}; // string / null / array → start fresh
+
+    const mergedPlanDetails = {
+      ...existingPlanDetails,
+      calculatedStartDate: formattedStartDate,
+      calculatedEndDate: formattedEndDate,
+    };
+
     const updated = await PaymentHistory.findOneAndUpdate(
       { razorpayOrderId: razorpay_order_id },
       {
@@ -1047,7 +1110,8 @@ export const verifyPlanPayment = async (req, res, next) => {
           status: "SUCCESS",
           razorpayPaymentId: String(razorpay_payment_id),
           razorpaySignature: String(razorpay_signature),
-          paidAt: new Date(),
+          paidAt: baseDate,
+          planDetails: mergedPlanDetails, // ← whole object, never dot-notation
         },
       },
       { new: true },
@@ -1072,13 +1136,26 @@ export const verifyPlanPayment = async (req, res, next) => {
       };
     }
 
-    if (responseData?.planEndDate && resolvedProfileId) {
-      const d = new Date(responseData.planEndDate);
-      if (!Number.isNaN(d.getTime())) {
-        const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const customerIdToUpdate = resolvedProfileId ? null : (responseData?.customer?.customerId || paidByPatch?.paidByCustomerId);
+    if (formattedEndDate) {
+      // Store both:
+      //   expirationDate  = plan end date (formattedEndDate = start + period)
+      //   lastRenewedAt   = recharge date (formattedStartDate = payment date / old expiry)
+      // Keeping them separate prevents the UI/reports from ever confusing
+      // the two values.
+      const renewalPatch = {
+        expirationDate: formattedEndDate,
+        ...(formattedStartDate ? { lastRenewedAt: formattedStartDate } : {}),
+      };
+      if (resolvedProfileId) {
         await Customer.findOneAndUpdate(
           { activlineUserId: resolvedProfileId },
-          { $set: { expirationDate: formattedDate } },
+          { $set: renewalPatch },
+        );
+      } else if (customerIdToUpdate) {
+        await Customer.findByIdAndUpdate(
+          customerIdToUpdate,
+          { $set: renewalPatch },
         );
       }
     }
@@ -1820,7 +1897,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
 
     const customer = await Customer.findById(customerId)
       .select(
-        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId expirationDate",
       )
       .lean();
 
@@ -1862,6 +1939,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
     const htmlContent = generateInvoiceHTML({
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
+      planStartDate: paymentData?.planStartDate,
       planEndDate: paymentData?.planEndDate,
       planName: paymentData.planName,
       amount: paymentData.amount,
