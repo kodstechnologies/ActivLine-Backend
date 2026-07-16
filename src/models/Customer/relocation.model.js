@@ -55,6 +55,15 @@ const relocationSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    previous_address: {
+      line2: String,
+      city: String,
+      pin: String,
+      state: String,
+      country: String,
+      latitude: Number,
+      longitude: Number,
+    },
     status: {
       type: String,
       enum: ["REQUEST", "PENDING", "COMPLETED"],

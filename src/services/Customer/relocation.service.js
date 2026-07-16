@@ -17,6 +17,20 @@ export const createRelocationService = async (user, payload) => {
     throw new ApiError(404, "Customer profile not found");
   }
 
+  let oldLat = null;
+  let oldLng = null;
+  if (customer.emailId) {
+    try {
+      const loc = await Location.findOne({ email: customer.emailId });
+      if (loc && loc.location) {
+        oldLat = loc.location.latitude;
+        oldLng = loc.location.longitude;
+      }
+    } catch (err) {
+      console.error("Failed to fetch old coordinates:", err.message);
+    }
+  }
+
   const {
     installation_address_line2,
     installation_address_city,
@@ -46,6 +60,15 @@ export const createRelocationService = async (user, payload) => {
     longitude: longitude ? Number(longitude) : null,
     latitude: latitude ? Number(latitude) : null,
     sifted_date: new Date(sifted_date),
+    previous_address: {
+      line2: customer.installationAddress?.line2 || customer.address?.line1 || "",
+      city: customer.installationAddress?.city || customer.address?.city || "",
+      pin: customer.installationAddress?.pin || customer.address?.pin || "",
+      state: customer.installationAddress?.state || customer.address?.state || "",
+      country: customer.installationAddress?.country || customer.address?.country || "India",
+      latitude: oldLat,
+      longitude: oldLng,
+    },
     status: "REQUEST",
   };
   if (existingRelocation?.status === "PENDING") {
