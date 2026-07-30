@@ -27,6 +27,24 @@ export const fetchFranchiseAccounts = async (req, res) => {
 
     const data = await syncFranchiseData();
 
+    const { search } = req.query;
+    if (search) {
+      const searchRegex = new RegExp(search, "i");
+      const filteredData = await Franchise.find({
+        $or: [
+          { companyName: searchRegex },
+          { accountName: searchRegex },
+          { accountId: searchRegex },
+        ],
+      }).sort({ dateCreated: -1 });
+
+      return res.status(200).json({
+        success: true,
+        message: "Franchise list fetched successfully",
+        data: filteredData,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Franchise list fetched successfully",
