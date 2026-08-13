@@ -90,6 +90,7 @@ export const loginUser = async ({
 
   if (isFranchise) {
     userObject.accountId = user.accountId;
+    userObject.profileImage = user.profileImage || null;
   }
 
   return {
