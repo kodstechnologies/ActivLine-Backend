@@ -16,10 +16,10 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const { email } = req.body;
 
-  await forgotPasswordService(email);
+  const otp = await forgotPasswordService(email);
 
   res.status(200).json(
-    ApiResponse.success(null, "OTP sent to email")
+    ApiResponse.success({ otp }, "OTP sent to email")
   );
 });
 
@@ -41,9 +41,9 @@ export const resendForgotPasswordOtp = asyncHandler(async (req, res) => {
 
   const { email } = req.body;
 
-  await forgotPasswordService(email);
+  const otp = await forgotPasswordService(email);
 
   res.status(200).json(
-    ApiResponse.success(null, "OTP resent to email")
+    ApiResponse.success({ otp }, "OTP resent to email")
   );
 });

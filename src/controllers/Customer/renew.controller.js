@@ -2,6 +2,7 @@ import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiError from "../../utils/ApiError.js";
 import { renewUserPlan } from "../../services/Customer/renew.service.js";
 import Customer from "../../models/Customer/customer.model.js";
+import PaymentHistory from "../../models/payment/paymentHistory.model.js";
 import { notifyFranchiseAdmins } from "../../services/Notification/franchise.notification.service.js";
 import { notifyCustomer } from "../../services/Notification/customer.notification.service.js";
 import {
@@ -80,7 +81,7 @@ export const renew = asyncHandler(async (req, res) => {
     try {
       const customer = await Customer.findOne({
         activlineUserId: String(userId),
-      }).select("_id userName accountId activlineUserId phoneNumber");
+      }).select("_id userName accountId activlineUserId phoneNumber userGroupId");
 
       if (customer?._id) {
         await resetUsageHistory(customer._id).catch((resetErr) => {
@@ -120,13 +121,30 @@ export const renew = asyncHandler(async (req, res) => {
         try {
           let planAmount = 0;
 
-          if (customer?.accountId) {
+          // 1. Try to fetch from the latest successful payment history of this customer
+          try {
+            const latestPayment = await PaymentHistory.findOne({
+              status: "SUCCESS",
+              $or: [
+                { paidByCustomerId: customer._id },
+                { paidByPhone: customer.phoneNumber },
+                { paidByUserName: customer.userName }
+              ]
+            }).sort({ paidAt: -1, createdAt: -1 });
+
+            if (latestPayment?.planAmount) {
+              planAmount = Number(latestPayment.planAmount);
+            }
+          } catch (payErr) {
+            console.error("Failed to fetch plan amount from payment history:", payErr.message);
+          }
+
+          // 2. If not found, try fetching from the franchise profile details matching the groupId
+          const targetGroupId = payload.groupId || customer.userGroupId;
+          if (!planAmount && customer.accountId && targetGroupId) {
             try {
               const profileResult = await fetchProfilesWithDetailsByFranchise(
-                customer.accountId,
-                {
-                  profileId: String(userId),
-                },
+                customer.accountId
               );
 
               const profilesList =
@@ -136,7 +154,7 @@ export const renew = asyncHandler(async (req, res) => {
                 [];
 
               const matchedProfile = profilesList.find(
-                (p) => String(p?.Profile?.id || p?.id || "") === String(userId),
+                (p) => String(p?.Profile?.groupId || p?.groupId || "") === String(targetGroupId),
               );
 
               const details =
@@ -195,7 +213,16 @@ export const renew = asyncHandler(async (req, res) => {
 
       if (customer?.userName) {
         const userRes = await getUserByUsername(customer.userName);
-        const inner = userRes?.[0] || userRes || [];
+        const getInnerArray = (res) => {
+          if (!res) return [];
+          if (Array.isArray(res)) {
+            if (Array.isArray(res[0])) return res[0];
+            return res;
+          }
+          if (Array.isArray(res.data)) return res.data;
+          return [];
+        };
+        const inner = getInnerArray(userRes);
         const userObj = inner.find((item) => item && item.User);
         const expirationTime = userObj?.User?.expirationTime;
 

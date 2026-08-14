@@ -13,10 +13,11 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   }
 
   // 1️⃣ Find customer
+  const emailRegex = new RegExp("^" + identifier.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i");
   const customer = await Customer.findOne({
     $or: [
       { phoneNumber: identifier },
-      { emailId: identifier.toLowerCase() },
+      { emailId: emailRegex },
     ],
   });
 
@@ -26,6 +27,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   // 2️⃣ Generate OTP
   const otp = generateOTP();
+  console.log("Forgot Password OTP (Customer):", otp);
 
   // 3️⃣ Save OTP with 10 min expiry
  customer.otp = {
@@ -56,5 +58,6 @@ await customer.save({ validateBeforeSave: false }); // ✅ FIX
   res.status(200).json({
     success: true,
     message: "OTP sent successfully",
+    otp,
   });
 });

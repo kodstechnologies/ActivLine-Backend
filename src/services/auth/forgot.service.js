@@ -26,6 +26,7 @@ export const forgotPasswordService = async (email) => {
   }
 
   const otp = generateOTP();
+  console.log("Forgot Password OTP (Auth):", otp);
 
   await ForgotRepo.saveOTP(user._id, String(otp), model);
 
@@ -34,6 +35,8 @@ export const forgotPasswordService = async (email) => {
     to: email,
     otp,
   });
+
+  return otp;
 };
 
 /**

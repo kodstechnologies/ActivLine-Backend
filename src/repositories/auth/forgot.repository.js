@@ -5,12 +5,13 @@ const resolveModel = (model) =>
   model === "FRANCHISE_ADMIN" ? FranchiseAdmin : Admin;
 
 export const findUserByEmail = async (email) => {
-  const admin = await Admin.findOne({ email });
+  const emailRegex = new RegExp("^" + email.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i");
+  const admin = await Admin.findOne({ email: emailRegex });
   if (admin) {
     return { user: admin, model: "ADMIN" };
   }
 
-  const franchise = await FranchiseAdmin.findOne({ email });
+  const franchise = await FranchiseAdmin.findOne({ email: emailRegex });
   if (franchise) {
     return { user: franchise, model: "FRANCHISE_ADMIN" };
   }
@@ -27,8 +28,9 @@ export const saveOTP = (userId, otp, model = "ADMIN") => {
 };
 
 export const findValidOTPUser = async (email, otp) => {
+  const emailRegex = new RegExp("^" + email.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i");
   const admin = await Admin.findOne({
-    email,
+    email: emailRegex,
     resetOTP: otp,
     resetOTPExpiry: { $gt: Date.now() },
   });
@@ -37,7 +39,7 @@ export const findValidOTPUser = async (email, otp) => {
   }
 
   const franchise = await FranchiseAdmin.findOne({
-    email,
+    email: emailRegex,
     resetOTP: otp,
     resetOTPExpiry: { $gt: Date.now() },
   });

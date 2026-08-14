@@ -34,7 +34,16 @@ export const startDailyDataUsageCron = () => {
           }
           const userRes = await getUserByUsername(customer.userName);
 
-          const inner = userRes?.[0] || userRes || [];
+          const getInnerArray = (res) => {
+            if (!res) return [];
+            if (Array.isArray(res)) {
+              if (Array.isArray(res[0])) return res[0];
+              return res;
+            }
+            if (Array.isArray(res.data)) return res.data;
+            return [];
+          };
+          const inner = getInnerArray(userRes);
           const usageObj = inner.find(
             (item) => item && item.currentBillingCycleUsage,
           );

@@ -17,10 +17,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
   }
 
   // 2️⃣ Find customer
+  const emailRegex = new RegExp("^" + identifier.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i");
   const customer = await Customer.findOne({
     $or: [
       { phoneNumber: identifier },
-      { emailId: identifier.toLowerCase() },
+      { emailId: emailRegex },
     ],
   });
 
@@ -63,7 +64,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
         message: MESSAGE,
         template_id: ID,
       });
-      console.log(`[SMS] Password reset success alert sent to ${customer.phoneNumber}`);
+      console.log(`[SMS] Password reset success alert sent to ${customer.phoneNumber} (Name: ${name}, Number: ${customer.phoneNumber}, Password: ${newPassword})`);
     } catch (smsErr) {
       console.error("[SMS] Failed to send password reset success alert:", smsErr.message);
     }

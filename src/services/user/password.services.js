@@ -32,9 +32,9 @@ class PasswordService {
     await user.save();
 
     // TODO: Replace with SMS / Email provider
-    console.log("Forgot Password OTP:", otp);
+    console.log("Forgot Password OTP (User):", otp);
 
-    return true;
+    return otp;
   }
 
   // 2️⃣ VERIFY OTP → ISSUE RESET JWT
@@ -105,7 +105,7 @@ class PasswordService {
           message: MESSAGE,
           template_id: ID,
         });
-        console.log(`[SMS] User password reset success alert sent to ${user.mobile}`);
+        console.log(`[SMS] User password reset success alert sent to ${user.mobile} (Name: ${name}, Number: ${user.mobile}, Password: ${newPassword})`);
       } catch (smsErr) {
         console.error("[SMS] Failed to send user password reset success alert:", smsErr.message);
       }

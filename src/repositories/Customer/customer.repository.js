@@ -5,10 +5,11 @@ export const findByMobile = (phoneNumber) => {
 };
 
 export const findByIdentifier = (identifier) => {
+  const emailRegex = new RegExp("^" + identifier.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i");
   return Customer.findOne({
     $or: [
       { phoneNumber: identifier },
-      { emailId: identifier.toLowerCase() },
+      { emailId: emailRegex },
     ],
   });
 };

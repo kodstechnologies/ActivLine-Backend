@@ -11,10 +11,10 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Identifier is required");
   }
 
-  await passwordService.sendForgotPasswordOTP(identifier);
+  const otp = await passwordService.sendForgotPasswordOTP(identifier);
 
   res.status(200).json(
-    ApiResponse.success(null, "OTP sent successfully")
+    ApiResponse.success({ otp }, "OTP sent successfully")
   );
 });
 
