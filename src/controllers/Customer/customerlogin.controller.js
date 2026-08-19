@@ -8,6 +8,8 @@ import {
   generateRefreshToken,
 } from "../../utils/customerTokens.js";
 import jwt from "jsonwebtoken";
+import axios from "axios";
+import { generateOTP } from "../../utils/otp.util.js";
 
 export const customerLogin = asyncHandler(async (req, res) => {
   const { identifier, password } = req.body || {};
@@ -210,6 +212,147 @@ export const customerLogout = asyncHandler(async (req, res) => {
       message: "Logged out successfully",
       deviceId,
       sessionRemoved: result.deletedCount === 1,
+    });
+});
+
+export const customerSendLoginOtp = asyncHandler(async (req, res) => {
+  const { identifier } = req.body || {};
+
+  if (!identifier) {
+    throw new ApiError(400, "Mobile number, username or user ID is required");
+  }
+
+  // Find customer in database by phoneNumber, userName or activlineUserId
+  const customer = await Customer.findOne({
+    $or: [
+      { phoneNumber: identifier },
+      { activlineUserId: String(identifier) },
+      { userName: identifier }
+    ],
+  });
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  // Generate a dynamic 6-digit OTP
+  const otp = generateOTP();
+
+  // Save OTP with 10 min expiry
+  customer.otp = {
+    code: otp,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  };
+
+  await customer.save({ validateBeforeSave: false });
+
+  // Send OTP SMS if enabled using KAP System / SMSJust API
+  if (customer.phoneNumber && process.env.SMS_ENABLED === "true") {
+    try {
+      let formattedNumber = customer.phoneNumber.trim().replace("+", "");
+      if (formattedNumber.startsWith("91") && formattedNumber.length === 12) {
+        formattedNumber = formattedNumber.slice(2);
+      }
+
+      const username = process.env.SMS_USERNAME;
+      const password = process.env.SMS_PASSWORD;
+      const senderId = process.env.SMS_SENDER_ID;
+      const templateId = "1077367810003904628";
+
+      const message = `Your OTP is ${otp}. Please use this OTP to complete your application login verification. Do not share this OTP with anyone. - Activline`;
+
+      const smsApiUrl = `https://www.smsjust.com/blank/sms/user/urlsms.php?username=${username}&pass=${password}&senderid=${senderId}&dest_mobileno=${formattedNumber}&message=${encodeURIComponent(message)}&dlttempid=${templateId}&response=Y`;
+
+      const response = await axios.post(smsApiUrl);
+      console.log("📨 KAP System OTP SMS sent successfully:", response.data);
+    } catch (smsErr) {
+      console.error("❌ KAP System OTP SMS Error:", smsErr.response?.data || smsErr.message);
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "OTP sent successfully",
+  });
+});
+
+export const customerVerifyLoginOtp = asyncHandler(async (req, res) => {
+  const { identifier, otp } = req.body || {};
+
+  if (!identifier || !otp) {
+    throw new ApiError(400, "Identifier and OTP are required");
+  }
+
+  // Find customer
+  const customer = await Customer.findOne({
+    $or: [
+      { phoneNumber: identifier },
+      { activlineUserId: String(identifier) },
+      { userName: identifier }
+    ],
+  });
+
+  if (!customer) {
+    throw new ApiError(404, "Customer not found");
+  }
+
+  // Validate OTP code and expiration
+  if (!customer.otp?.code) {
+    throw new ApiError(400, "OTP not requested");
+  }
+
+  if (customer.otp.code !== otp) {
+    throw new ApiError(401, "Invalid OTP");
+  }
+
+  if (customer.otp.expiresAt < new Date()) {
+    throw new ApiError(400, "OTP expired");
+  }
+
+  // Clear OTP fields
+  customer.otp = { code: null, expiresAt: null };
+  await customer.save({ validateBeforeSave: false });
+
+  // Device ID
+  const deviceId =
+    req.headers["x-device-id"] || crypto.randomBytes(8).toString("hex");
+
+  // Generate tokens
+  const accessToken = generateAccessToken(customer, deviceId);
+  const refreshToken = generateRefreshToken(customer, deviceId);
+
+  // Save refresh token session
+  await CustomerSession.findOneAndUpdate(
+    { customerId: customer._id, deviceId },
+    {
+      refreshToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      lastUsedAt: new Date(),
+    },
+    { upsert: true }
+  );
+
+  res
+    .cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 30 * 60 * 1000,
+    })
+    .cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    })
+    .status(200)
+    .json({
+      success: true,
+      message: "Login successful",
+      deviceId,
+      userId: customer.activlineUserId,
+      accessToken,
+      refreshToken,
     });
 });
 
