@@ -44,7 +44,7 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
         attachments.push({
           url: uploaded.secure_url,
           name: file.originalname,
-          size: uploaded.bytes, // ✅ Use actual stored size from Cloudinary
+          size: uploaded.bytes, // ✅ Use actual stored size from S3
 
           // 🔑 IMPORTANT
           mimeType: file.mimetype, // application/pdf

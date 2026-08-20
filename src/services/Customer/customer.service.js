@@ -848,7 +848,7 @@ export const updateProfileImageService = async (userId, file) => {
   const uploaded = await uploadOnCloudinary(file.path);
 
   if (!uploaded) {
-    throw new ApiError(500, "Cloudinary upload failed");
+    throw new ApiError(500, "S3 upload failed");
   }
 
   // 🔹 Delete old image (if exists)
@@ -885,7 +885,7 @@ export const deleteProfileImageService = async (userId) => {
     throw new ApiError(400, "No profile image to delete");
   }
 
-  // 🔹 Delete from Cloudinary
+  // 🔹 Delete from S3
   await deleteFromCloudinary(oldImage);
 
   // 🔹 Remove from DB
