@@ -26,8 +26,6 @@ import Referral from "../../models/Customer/referral.model.js";
 
 const uploadCustomerDocumentsForUpdate = async (files) => {
   const documentUrls = {};
-  const uploadedFilePaths = [];
-  const uploadPromises = [];
   const fileTypes = [
     "idFile",
     "addressFile",
@@ -38,38 +36,19 @@ const uploadCustomerDocumentsForUpdate = async (files) => {
     "profileImage",
   ];
 
-  try {
-    for (const fileType of fileTypes) {
-      if (files?.[fileType]?.[0]?.path) {
-        const filePath = files[fileType][0].path;
-        if (!uploadedFilePaths.includes(filePath)) {
-          uploadedFilePaths.push(filePath);
-        }
-        uploadPromises.push(
-          uploadOnCloudinary(filePath).then((result) => {
-            if (result) {
-              documentUrls[fileType] = result.secure_url;
-            }
-          }),
-        );
-      }
+  // multer-s3 already uploaded each file to S3 — just read file.location
+  for (const fileType of fileTypes) {
+    if (files?.[fileType]?.[0]?.location) {
+      documentUrls[fileType] = files[fileType][0].location;
     }
-
-    await Promise.all(uploadPromises);
-
-    if (documentUrls.profileImage && !documentUrls.profilePicFile) {
-      documentUrls.profilePicFile = documentUrls.profileImage;
-    }
-    delete documentUrls.profileImage;
-
-    return documentUrls;
-  } finally {
-    uploadedFilePaths.forEach((filePath) => {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    });
   }
+
+  if (documentUrls.profileImage && !documentUrls.profilePicFile) {
+    documentUrls.profilePicFile = documentUrls.profileImage;
+  }
+  delete documentUrls.profileImage;
+
+  return documentUrls;
 };
 
 export const loginCustomer = async ({ identifier, password }) => {
@@ -228,15 +207,19 @@ export const createCustomerService = async (payload, files) => {
     }
   });
 
-  if (files?.idFile) {
+  if (files?.idFile?.[0]?.path) {
     formData.append("idFile", fs.createReadStream(files.idFile[0].path));
+  } else if (files?.idFile?.[0]?.location) {
+    formData.append("idFile", files.idFile[0].location);
   }
 
-  if (files?.addressFile) {
+  if (files?.addressFile?.[0]?.path) {
     formData.append(
       "addressFile",
       fs.createReadStream(files.addressFile[0].path),
     );
+  } else if (files?.addressFile?.[0]?.location) {
+    formData.append("addressFile", files.addressFile[0].location);
   }
 
   // 🔹 2. Create user in Activline
@@ -647,6 +630,8 @@ export const updateCustomerService = async (
 
   if (files?.idFile?.[0]?.path) {
     formData.append("idFile", fs.createReadStream(files.idFile[0].path));
+  } else if (files?.idFile?.[0]?.location) {
+    formData.append("idFile", files.idFile[0].location);
   }
 
   await activlineClient.post("/add_user", formData, {
@@ -844,31 +829,23 @@ export const updateProfileImageService = async (userId, file) => {
     throw new ApiError(404, "Customer not found");
   }
 
-  // 🔹 Upload new image
-  const uploaded = await uploadOnCloudinary(file.path);
-
-  if (!uploaded) {
+  // multer-s3 already uploaded to S3 — URL is in file.location
+  if (!file?.location) {
     throw new ApiError(500, "S3 upload failed");
   }
 
-  // 🔹 Delete old image (if exists)
+  // 🔹 Delete old image from S3 (if exists)
   const oldImage = customer.documents?.profilePicFile;
-
   if (oldImage) {
-    await deleteFromCloudinary(oldImage);
+    await deleteFromCloudinary(oldImage); // deleteFromS3 via shim
   }
 
   // 🔹 Update DB
-  customer.documents.profilePicFile = uploaded.secure_url;
+  customer.documents.profilePicFile = file.location;
   await customer.save();
 
-  // 🔹 Cleanup local file
-  if (fs.existsSync(file.path)) {
-    fs.unlinkSync(file.path);
-  }
-
   return {
-    profilePicFile: uploaded.secure_url,
+    profilePicFile: file.location,
   };
 };
 

@@ -2,7 +2,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import ChatRoom from "../models/chat/chatRoom.model.js";
 
-import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { uploadToS3 } from "../utils/s3Upload.js";
 import ChatMessage from "../models/chat/chatMessage.model.js";
 import { canUserSendMessage } from "../services/chat/chat.service.js";
 // import fs from "fs";
@@ -170,10 +170,11 @@ export const initSocket = (server) => {
               throw new Error("Received empty file buffer");
             }
 
-            const uploaded = await uploadToCloudinary({
+            const uploaded = await uploadToS3({
               buffer: Buffer.from(file.buffer),
               mimetype: file.type || "application/octet-stream",
               originalname: file.name,
+              folder: "activline/chat",
             });
 
             uploadedAttachments.push({

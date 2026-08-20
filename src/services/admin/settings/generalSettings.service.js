@@ -1,6 +1,6 @@
 // services/generalSettings.service.js
-import fs from "fs";
-import { uploadOnS3, deleteFromS3ByKey } from "../../../utils/s3Upload.js";
+// multer-s3 now streams banners DIRECTLY to S3 — no manual upload needed here.
+import { deleteFromS3ByKey } from "../../../utils/s3Upload.js";
 import Banner from "../../../models/admin/Settings/banner.model.js";
 import GeneralSettings from "../../../models/admin/Settings/generalSettings.model.js";
 import { ApiError } from "../../../utils/ApiError.js";
@@ -9,7 +9,6 @@ import { ApiError } from "../../../utils/ApiError.js";
 
 export const getGeneralSettingsService = async () => {
   let settings = await GeneralSettings.findOne();
-
   if (!settings) {
     settings = await GeneralSettings.create({
       companyName: "ActivLine Internet",
@@ -17,7 +16,6 @@ export const getGeneralSettingsService = async () => {
       address: "Not configured",
     });
   }
-
   return settings;
 };
 
@@ -30,37 +28,10 @@ export const updateGeneralSettingsService = async (data, adminId) => {
   return settings;
 };
 
-// ── S3 helpers ────────────────────────────────────────────────────────────────
+// ── S3 delete helper ──────────────────────────────────────────────────────────
 
 /**
- * Upload banner via disk path (multer diskStorage → req.file.path).
- * Deletes the local temp file after upload regardless of success/failure.
- */
-const uploadBannerToS3 = async (file) => {
-  const localPath = file.path;
-
-  try {
-    const result = await uploadOnS3(
-      localPath,
-      "activline/banners"
-    );
-
-    if (!result) {
-      throw new ApiError(500, "S3 upload failed — no URL returned");
-    }
-
-    return result; // { secure_url, key, public_id, resource_type, format }
-  } finally {
-    // Always clean up temp file from disk — never leave orphaned files
-    fs.unlink(localPath, (err) => {
-      if (err) console.warn("⚠️  Could not delete temp file:", localPath, err.message);
-    });
-  }
-};
-
-/**
- * Delete a banner from S3 by stored s3_key.
- * Non-fatal — logs warning but never blocks DB operations.
+ * Delete a banner from S3 by stored s3_key. Non-fatal.
  */
 const deleteBannerFromS3 = async (s3Key) => {
   if (!s3Key) return;
@@ -74,19 +45,16 @@ const deleteBannerFromS3 = async (s3Key) => {
  */
 export const getAllBannersService = async () => {
   let doc = await Banner.findOne();
-  if (!doc) {
-    doc = await Banner.create({ banners: [] });
-  }
+  if (!doc) doc = await Banner.create({ banners: [] });
   return doc;
 };
 
 /**
- * CREATE — upload to S3 via disk path, push new item into banners[].
+ * CREATE — multer-s3 already uploaded the file to S3.
+ * req.file contains:  location (URL), key (S3 key), mimetype, size
  */
 export const createBannerService = async (file) => {
-  const uploaded = await uploadBannerToS3(file);
-
-  if (!uploaded?.secure_url) {
+  if (!file?.location) {
     throw new ApiError(500, "S3 upload failed — no URL returned");
   }
 
@@ -98,8 +66,8 @@ export const createBannerService = async (file) => {
       $push: {
         banners: {
           file_type: fileType,
-          url: uploaded.secure_url,
-          s3_key: uploaded.key,
+          url: file.location,   // ✅ S3 URL from multer-s3
+          s3_key: file.key,     // ✅ S3 key for future deletion
           isActive: true,
         },
       },
@@ -107,44 +75,38 @@ export const createBannerService = async (file) => {
     { upsert: true, new: true }
   );
 
-  // Return only the newly added item
   return doc.banners[doc.banners.length - 1];
 };
 
 /**
- * UPDATE — replace an existing banner's file.
- * 1. Upload new file first (so we never lose the old URL if upload fails).
- * 2. Delete old S3 resource (best-effort).
- * 3. Update DB.
+ * UPDATE — multer-s3 already uploaded the new file.
+ * 1. Delete old S3 file.
+ * 2. Update DB with new URL + key.
  */
 export const updateBannerService = async (bannerId, file) => {
+  if (!file?.location) {
+    throw new ApiError(500, "S3 upload failed — no URL returned");
+  }
+
   const doc = await Banner.findOne({ "banners._id": bannerId });
   if (!doc) throw new ApiError(404, "Banner not found");
 
   const existingItem = doc.banners.id(bannerId);
 
-  // 1. Upload new file
-  const uploaded = await uploadBannerToS3(file);
-  if (!uploaded?.secure_url) {
-    throw new ApiError(500, "S3 upload failed — no URL returned");
-  }
-
-  const fileType = file.mimetype?.startsWith("image/") ? "image" : "video";
-
-  // 2. Delete old S3 resource
+  // Delete old S3 object (best-effort)
   await deleteBannerFromS3(existingItem.s3_key);
 
-  // 3. Update subdocument
+  const fileType = file.mimetype?.startsWith("image/") ? "image" : "video";
   existingItem.file_type = fileType;
-  existingItem.url = uploaded.secure_url;
-  existingItem.s3_key = uploaded.key;
+  existingItem.url = file.location;
+  existingItem.s3_key = file.key;
 
   await doc.save();
   return existingItem;
 };
 
 /**
- * TOGGLE isActive — flip active state without deleting.
+ * TOGGLE isActive — flip without deleting.
  */
 export const toggleBannerService = async (bannerId) => {
   const doc = await Banner.findOne({ "banners._id": bannerId });
@@ -164,7 +126,6 @@ export const deleteBannerService = async (bannerId) => {
   if (!doc) throw new ApiError(404, "Banner not found");
 
   const item = doc.banners.id(bannerId);
-
   await deleteBannerFromS3(item.s3_key);
 
   doc.banners.pull({ _id: bannerId });

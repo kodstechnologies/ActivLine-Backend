@@ -2,6 +2,7 @@
 // AWS S3 replacement for Cloudinary — exposes the same return-value shape
 // so all existing callers work without changes.
 
+import "dotenv/config";
 import {
   S3Client,
   PutObjectCommand,

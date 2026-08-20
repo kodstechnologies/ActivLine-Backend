@@ -14,7 +14,7 @@ import {
 import { verifyJWT } from "../../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../../middlewares/role.middleware.js";
 import { ROLES } from "../../../constants/roles.js";
-import { upload } from "../../../middlewares/multer.middleware.js";
+import { bannerUpload } from "../../../middlewares/multer.middleware.js";
 
 const router = Router();
 
@@ -66,7 +66,7 @@ router.post(
     ROLES.ADMIN_STAFF,
     ROLES.FRANCHISE_ADMIN,
   ),
-  upload.single("file"),
+  bannerUpload.single("file"),
   createBanner,
 );
 
@@ -84,7 +84,7 @@ router.put(
     ROLES.ADMIN_STAFF,
     ROLES.FRANCHISE_ADMIN,
   ),
-  upload.single("file"),
+  bannerUpload.single("file"),
   updateBanner,
 );
 

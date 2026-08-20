@@ -1,14 +1,15 @@
+// controllers/chat/chat.upload.controller.js
+// multer-s3 streams files directly to S3 — no manual upload needed here.
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import ApiResponse from "../../utils/ApiReponse.js";
 import { chatUpload } from "../../middlewares/upload.middleware.js";
-import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import ChatMessage from "../../models/chat/chatMessage.model.js";
 import { getIO } from "../../socket/index.js";
 import ChatRoom from "../../models/chat/chatRoom.model.js";
 import * as ChatService from "../../services/chat/chat.service.js";
 
 export const uploadChatFiles = asyncHandler(async (req, res) => {
-  // 1️⃣ Handle Multipart Upload (Promisified)
+  // 1️⃣ Handle Multipart Upload — multer-s3 streams directly to S3
   await new Promise((resolve, reject) => {
     chatUpload.array("files", 5)(req, res, (err) => {
       if (err) return reject(err);
@@ -35,33 +36,20 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
     accountId: req.user.accountId,
   });
 
+  // 3️⃣ Build attachments from multer-s3 result
+  // file.location = S3 public URL, file.key = S3 key, file.size = bytes
   const attachments = [];
 
   if (req.files && req.files.length > 0) {
     for (const file of req.files) {
-      try {
-        const uploaded = await uploadToCloudinary(file);
-        attachments.push({
-          url: uploaded.secure_url,
-          name: file.originalname,
-          size: uploaded.bytes, // ✅ Use actual stored size from S3
-
-          // 🔑 IMPORTANT
-          mimeType: file.mimetype, // application/pdf
-          extension: file.originalname.split(".").pop().toLowerCase(),
-
-          // UI helper only
-          type:
-            uploaded.resource_type === "image" && uploaded.format !== "pdf"
-              ? "image"
-              : "file",
-        });
-      } catch (uploadError) {
-        console.error("File upload failed:", uploadError);
-        return res
-          .status(500)
-          .json(ApiResponse.error("Failed to upload files"));
-      }
+      attachments.push({
+        url: file.location,                                       // ✅ S3 URL (direct)
+        name: file.originalname,
+        size: file.size,                                          // ✅ actual size in bytes
+        mimeType: file.mimetype,
+        extension: file.originalname.split(".").pop().toLowerCase(),
+        type: file.mimetype.startsWith("image/") ? "image" : "file",
+      });
     }
   }
 
@@ -69,7 +57,7 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
     return res.status(400).json(ApiResponse.error("Message or files required"));
   }
 
-  // ✅ CREATE CHAT MESSAGE
+  // 4️⃣ CREATE CHAT MESSAGE
   const senderModel =
     req.user.role === "CUSTOMER"
       ? "Customer"
@@ -90,8 +78,6 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
           : "FILE"
         : "TEXT",
     attachments,
-
-    // 🔥 ADD THIS LINE (VERY IMPORTANT)
     tempId: req.body.tempId || null,
     statusAtThatTime: room.status,
   });
@@ -101,7 +87,7 @@ export const uploadChatFiles = asyncHandler(async (req, res) => {
     "fullName email role"
   );
 
-  // ✅ EMIT SOCKET (THIS IS WHAT MAKES CHAT WORK)
+  // 5️⃣ EMIT SOCKET
   getIO().to(roomId).emit("new-message", populated);
 
   res.json(ApiResponse.success(populated, "Message sent successfully"));

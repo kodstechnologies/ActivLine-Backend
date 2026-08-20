@@ -3,7 +3,6 @@ import Franchise from "../../models/Franchise/franchise.model.js";
 import Admin from "../../models/auth/auth.model.js";
 import axios from "axios";
 import bcrypt from "bcryptjs";
-import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
 import { asyncHandler } from "../../utils/AsyncHandler.js";
 import { createActivityLog } from "../../services/ActivityLog/activityLog.service.js";
 import {
@@ -43,14 +42,8 @@ export const createFranchiseAdmin = asyncHandler(async (req, res) => {
   let profileImage = "";
 
   if (req.file) {
-
-    const result = await uploadToCloudinary({
-      buffer: req.file.buffer,
-      mimetype: req.file.mimetype,
-      originalname: req.file.originalname
-    });
-
-    profileImage = result.secure_url;
+    // multer-s3 already uploaded to S3 — URL is in file.location
+    profileImage = req.file.location;
   }
 
   const admin = await FranchiseAdmin.create({
@@ -228,12 +221,8 @@ export const updateMyFranchiseAdminProfile = asyncHandler(async (req, res) => {
   }
 
   if (req.file) {
-    const result = await uploadToCloudinary({
-      buffer: req.file.buffer,
-      mimetype: req.file.mimetype,
-      originalname: req.file.originalname,
-    });
-    updateData.profileImage = result.secure_url;
+    // multer-s3 already uploaded to S3 — URL is in file.location
+    updateData.profileImage = req.file.location;
   }
 
   if (Object.keys(updateData).length === 0) {
@@ -289,15 +278,9 @@ export const updateFranchiseAdmin = async (req,res)=>{
    updateData.password = await bcrypt.hash(rawPassword,10);
  }
 
- if(req.file){
-
-   const result = await uploadToCloudinary({
-     buffer:req.file.buffer,
-     mimetype:req.file.mimetype,
-     originalname:req.file.originalname
-   });
-
-   updateData.profileImage = result.secure_url;
+ if (req.file) {
+   // multer-s3 already uploaded to S3 — URL is in file.location
+   updateData.profileImage = req.file.location;
  }
 
  const admin = await FranchiseAdmin.findByIdAndUpdate(
