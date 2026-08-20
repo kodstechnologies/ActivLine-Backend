@@ -1,49 +1,34 @@
-import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
+// utils/cloudinary.js
+// ⚡ SHIM — Cloudinary has been replaced by AWS S3.
+// All exports preserve the exact same names so every importing file
+// (customer.service.js, generalSettings.service.js, razorpay.controller.js …)
+// continues to work without changing a single import statement.
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import {
+  uploadOnS3,
+  deleteFromS3,
+  getS3DownloadUrl,
+} from "./s3Upload.js";
 
-const uploadOnCloudinary = async (localFilePath) => {
-  try {
-    if (!localFilePath) {
-      return null;
-    }
-    // Upload the file on Cloudinary
-    const response = await cloudinary.uploader.upload(localFilePath, {
-      resource_type: "auto",
-    });
-    return response;
-  } catch (error) {
-    console.error("Error uploading to Cloudinary:", error);
-    return null;
-  }
+// ── Named exports (same as the old cloudinary.js) ────────────────────────────
+
+/**
+ * Upload a file from a local disk path to S3.
+ * Drop-in replacement for the old `uploadOnCloudinary(localFilePath)`.
+ */
+export const uploadOnCloudinary = uploadOnS3;
+
+/**
+ * Delete a file from S3 by its stored URL.
+ * Drop-in replacement for the old `deleteFromCloudinary(fileUrl)`.
+ */
+export const deleteFromCloudinary = deleteFromS3;
+
+// ── Default export — mirrors the `cloudinary` v2 object surface used in code ──
+// Only the `.url()` method is called externally (razorpay.controller.js).
+
+const cloudinaryShim = {
+  url: getS3DownloadUrl,
 };
 
-
-const deleteFromCloudinary = async (fileUrl) => {
-  try {
-    if (!fileUrl) return;
-
-    // Extract public_id safely
-    const parts = fileUrl.split("/");
-    const fileName = parts[parts.length - 1];   // e.g. abc123.jpg
-    const publicId = fileName.split(".")[0];     // e.g. abc123
-
-    console.log("🗑 Deleting from Cloudinary:", publicId);
-
-    await cloudinary.uploader.destroy(publicId, {
-      resource_type: "image", // change to "raw" if deleting PDFs/docs
-    });
-
-  } catch (error) {
-    console.error("Cloudinary delete error:", error.message);
-  }
-};
-
-export { deleteFromCloudinary };
-export { uploadOnCloudinary };
-export default cloudinary;
+export default cloudinaryShim;

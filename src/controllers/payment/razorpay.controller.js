@@ -11,8 +11,7 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { uploadToCloudinary } from "../../utils/cloudinaryUpload.js";
-import cloudinary from "../../utils/cloudinary.js";
+import { uploadToS3, getS3DownloadUrl } from "../../utils/s3Upload.js";
 import puppeteer from "puppeteer";
 import { generateInvoiceHTML } from "../../utils/invoiceTemplate.js";
 
@@ -2031,21 +2030,17 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
 
     await browser.close();
 
-    // Convert Puppeteer's Uint8Array to a Node.js Buffer for Cloudinary/streamifier
+    // Convert Puppeteer's Uint8Array to a Node.js Buffer for S3 upload
     const pdfBuffer = Buffer.from(pdfUint8Array);
 
-    const uploadResult = await uploadToCloudinary({
+    const uploadResult = await uploadToS3({
       buffer: pdfBuffer,
       mimetype: "application/pdf",
       originalname: filename,
+      folder: "activline/invoices",
     });
 
-    const downloadUrl = cloudinary.url(uploadResult.public_id, {
-      resource_type: uploadResult.resource_type || "raw",
-      type: uploadResult.type || "upload",
-      flags: "attachment",
-      format: uploadResult.format || "pdf",
-    });
+    const downloadUrl = getS3DownloadUrl(uploadResult.key);
 
     return res.status(200).json({
       success: true,

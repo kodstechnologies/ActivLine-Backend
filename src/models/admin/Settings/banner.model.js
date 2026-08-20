@@ -12,8 +12,8 @@ const bannerItemSchema = new mongoose.Schema(
       type: String,
       required: [true, "Banner URL is required"],
     },
-    // Stored so we can delete the old file from Cloudinary on update / delete
-    cloudinary_public_id: {
+    // Stored so we can delete the old file from S3 on update / delete
+    s3_key: {
       type: String,
       default: null,
     },

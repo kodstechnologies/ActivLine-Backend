@@ -1,6 +1,6 @@
 // services/generalSettings.service.js
 import fs from "fs";
-import cloudinary from "../../../utils/cloudinary.js";
+import { uploadOnS3, deleteFromS3ByKey } from "../../../utils/s3Upload.js";
 import Banner from "../../../models/admin/Settings/banner.model.js";
 import GeneralSettings from "../../../models/admin/Settings/generalSettings.model.js";
 import { ApiError } from "../../../utils/ApiError.js";
@@ -30,30 +30,26 @@ export const updateGeneralSettingsService = async (data, adminId) => {
   return settings;
 };
 
-// ── Cloudinary helpers ────────────────────────────────────────────────────────
+// ── S3 helpers ────────────────────────────────────────────────────────────────
 
 /**
  * Upload banner via disk path (multer diskStorage → req.file.path).
- * Uses resource_type:"auto" so Cloudinary handles images AND videos correctly.
  * Deletes the local temp file after upload regardless of success/failure.
  */
-const uploadBannerToCloudinary = async (file) => {
+const uploadBannerToS3 = async (file) => {
   const localPath = file.path;
 
   try {
-    const sanitizedName = file.originalname
-      .replace(/\.[^/.]+$/, "")
-      .replace(/[^a-zA-Z0-9-_]/g, "_");
+    const result = await uploadOnS3(
+      localPath,
+      "activline/banners"
+    );
 
-    const result = await cloudinary.uploader.upload(localPath, {
-      folder: "activline/banners",
-      resource_type: "auto",          // ✅ auto-detects image OR video
-      public_id: `${Date.now()}-${sanitizedName}`,
-      use_filename: true,
-      unique_filename: true,
-    });
+    if (!result) {
+      throw new ApiError(500, "S3 upload failed — no URL returned");
+    }
 
-    return result;
+    return result; // { secure_url, key, public_id, resource_type, format }
   } finally {
     // Always clean up temp file from disk — never leave orphaned files
     fs.unlink(localPath, (err) => {
@@ -63,16 +59,12 @@ const uploadBannerToCloudinary = async (file) => {
 };
 
 /**
- * Delete a banner from Cloudinary by stored public_id + resource_type.
+ * Delete a banner from S3 by stored s3_key.
  * Non-fatal — logs warning but never blocks DB operations.
  */
-const deleteBannerFromCloudinary = async (publicId, resourceType = "image") => {
-  if (!publicId) return;
-  try {
-    await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
-  } catch (err) {
-    console.error("⚠️  Cloudinary delete failed (continuing):", err?.message);
-  }
+const deleteBannerFromS3 = async (s3Key) => {
+  if (!s3Key) return;
+  await deleteFromS3ByKey(s3Key);
 };
 
 // ── Banner CRUD ───────────────────────────────────────────────────────────────
@@ -89,13 +81,13 @@ export const getAllBannersService = async () => {
 };
 
 /**
- * CREATE — upload to Cloudinary via disk path, push new item into banners[].
+ * CREATE — upload to S3 via disk path, push new item into banners[].
  */
 export const createBannerService = async (file) => {
-  const uploaded = await uploadBannerToCloudinary(file);
+  const uploaded = await uploadBannerToS3(file);
 
   if (!uploaded?.secure_url) {
-    throw new ApiError(500, "Cloudinary upload failed — no URL returned");
+    throw new ApiError(500, "S3 upload failed — no URL returned");
   }
 
   const fileType = file.mimetype?.startsWith("image/") ? "image" : "video";
@@ -107,7 +99,7 @@ export const createBannerService = async (file) => {
         banners: {
           file_type: fileType,
           url: uploaded.secure_url,
-          cloudinary_public_id: uploaded.public_id,
+          s3_key: uploaded.key,
           isActive: true,
         },
       },
@@ -122,7 +114,7 @@ export const createBannerService = async (file) => {
 /**
  * UPDATE — replace an existing banner's file.
  * 1. Upload new file first (so we never lose the old URL if upload fails).
- * 2. Delete old Cloudinary resource (best-effort).
+ * 2. Delete old S3 resource (best-effort).
  * 3. Update DB.
  */
 export const updateBannerService = async (bannerId, file) => {
@@ -132,21 +124,20 @@ export const updateBannerService = async (bannerId, file) => {
   const existingItem = doc.banners.id(bannerId);
 
   // 1. Upload new file
-  const uploaded = await uploadBannerToCloudinary(file);
+  const uploaded = await uploadBannerToS3(file);
   if (!uploaded?.secure_url) {
-    throw new ApiError(500, "Cloudinary upload failed — no URL returned");
+    throw new ApiError(500, "S3 upload failed — no URL returned");
   }
 
   const fileType = file.mimetype?.startsWith("image/") ? "image" : "video";
 
-  // 2. Delete old Cloudinary resource
-  const oldResourceType = existingItem.file_type === "video" ? "video" : "image";
-  await deleteBannerFromCloudinary(existingItem.cloudinary_public_id, oldResourceType);
+  // 2. Delete old S3 resource
+  await deleteBannerFromS3(existingItem.s3_key);
 
   // 3. Update subdocument
   existingItem.file_type = fileType;
   existingItem.url = uploaded.secure_url;
-  existingItem.cloudinary_public_id = uploaded.public_id;
+  existingItem.s3_key = uploaded.key;
 
   await doc.save();
   return existingItem;
@@ -166,16 +157,15 @@ export const toggleBannerService = async (bannerId) => {
 };
 
 /**
- * DELETE — remove from Cloudinary then pull from banners[].
+ * DELETE — remove from S3 then pull from banners[].
  */
 export const deleteBannerService = async (bannerId) => {
   const doc = await Banner.findOne({ "banners._id": bannerId });
   if (!doc) throw new ApiError(404, "Banner not found");
 
   const item = doc.banners.id(bannerId);
-  const resourceType = item.file_type === "video" ? "video" : "image";
 
-  await deleteBannerFromCloudinary(item.cloudinary_public_id, resourceType);
+  await deleteBannerFromS3(item.s3_key);
 
   doc.banners.pull({ _id: bannerId });
   await doc.save();
