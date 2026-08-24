@@ -10,9 +10,11 @@ import {
   getSinglePlanPaymentDetails,
   getLatestFranchisePaymentHistory,
   getLatestPurchasedPlan,
+  downloadPaymentHistoryExcel,
 } from "../../controllers/payment/razorpay.controller.js";
 import { verifyJWT } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
+
 
 const router = Router();
 
@@ -47,6 +49,14 @@ router.get(
   allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
   getLatestPurchasedPlan
 );
+// ✅ Download payment history as Excel (with filters) — must be BEFORE /:paymentId
+router.get(
+  "/history/download/excel",
+  verifyJWT,
+  allowRoles("ADMIN", "SUPER_ADMIN", "ADMIN_STAFF", "FRANCHISE_ADMIN"),
+  downloadPaymentHistoryExcel
+);
 router.get("/history/:paymentId", getSinglePlanPaymentDetails);
+
 
 export default router;

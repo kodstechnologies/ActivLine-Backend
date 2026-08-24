@@ -2926,3 +2926,352 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
     return next(error);
   }
 };
+
+// ============================================================
+// ✅ DOWNLOAD PAYMENT HISTORY AS EXCEL
+// GET /api/payment/history/download/excel
+// Filters: paymentIds, status, accountId, fromDate, toDate, search, groupId, page, limit
+// ============================================================
+export const downloadPaymentHistoryExcel = async (req, res, next) => {
+  try {
+    const ExcelJS = (await import("exceljs")).default;
+
+    const {
+      paymentIds,
+      status,
+      accountId,
+      groupId,
+      fromDate,
+      toDate,
+      search,
+      planName,
+      page,
+      limit,
+    } = req.query;
+
+    // ── Build filter query ──────────────────────────────────
+    const query = {};
+
+    // 1. Role-based scoping
+    if (req.user?.role === "FRANCHISE_ADMIN") {
+      const franchiseAccountId = String(req.user?.accountId || "").trim();
+      if (!franchiseAccountId) {
+        return res.status(403).json({
+          success: false,
+          message: "Franchise account ID not found for user",
+        });
+      }
+      query.accountId = franchiseAccountId;
+    } else if (accountId) {
+      query.accountId = String(accountId).trim();
+    }
+
+    // 2. Specific selected IDs filter
+    let selectedIdsList = [];
+    if (paymentIds) {
+      if (Array.isArray(paymentIds)) {
+        selectedIdsList = paymentIds.map((id) => String(id).trim()).filter(Boolean);
+      } else if (typeof paymentIds === "string") {
+        selectedIdsList = paymentIds
+          .split(",")
+          .map((id) => id.trim())
+          .filter(Boolean);
+      }
+    }
+
+    if (selectedIdsList.length > 0) {
+      query._id = { $in: selectedIdsList };
+    }
+
+    // 3. Status filter
+    if (status && ["SUCCESS", "PENDING", "FAILED"].includes(status)) {
+      query.status = status;
+    }
+
+    // 4. Group & Plan filters
+    if (groupId) query.groupId = String(groupId).trim();
+    if (planName) query.planName = new RegExp(escapeRegex(planName), "i");
+
+    // 5. Date range filter
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
+    }
+
+    // 6. Search filter
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      const searchOr = [
+        { paidByUserName: searchRegex },
+        { paidByName: searchRegex },
+        { paidByPhone: searchRegex },
+        { razorpayOrderId: searchRegex },
+        { razorpayPaymentId: searchRegex },
+        { planName: searchRegex },
+        { accountId: searchRegex },
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
+    }
+
+    // ── Pagination or Full query ─────────────────────────────
+    let dbQuery = PaymentHistory.find(query).sort({ createdAt: -1 });
+
+    const parsedLimit = parseInt(limit, 10);
+    const parsedPage = parseInt(page, 10) || 1;
+
+    if (selectedIdsList.length > 0) {
+      // Fetch selected records directly
+      dbQuery = dbQuery.limit(selectedIdsList.length);
+    } else if (Number.isFinite(parsedLimit) && parsedLimit > 0) {
+      // Limit to specific count / page (e.g. 10 items)
+      const skip = (parsedPage - 1) * parsedLimit;
+      dbQuery = dbQuery.skip(skip).limit(parsedLimit);
+    } else {
+      // Default safety cap for full export
+      dbQuery = dbQuery.limit(10000);
+    }
+
+    const items = await dbQuery.lean();
+
+    // ── Resolve customer info ─────────────────────────────────
+    const itemDocs = items.map((item) => ({
+      ...item,
+      toObject: () => item,
+    }));
+    const resolveCustomer = await buildCustomerResolver(itemDocs);
+
+    // ── Build Excel workbook ──────────────────────────────────
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Activline";
+    workbook.created = new Date();
+
+    const sheet = workbook.addWorksheet("Payment History", {
+      pageSetup: { fitToPage: true, fitToWidth: 1 },
+    });
+
+    // Header style
+    const headerFill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF1E3A5F" },
+    };
+    const headerFont = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+    const headerAlignment = { vertical: "middle", horizontal: "center" };
+    const borderStyle = {
+      top: { style: "thin" },
+      left: { style: "thin" },
+      bottom: { style: "thin" },
+      right: { style: "thin" },
+    };
+
+    // ── Columns ───────────────────────────────────────────────
+    sheet.columns = [
+      { header: "No.", key: "no", width: 6 },
+      { header: "Payment ID", key: "paymentId", width: 28 },
+      { header: "Order ID", key: "orderId", width: 30 },
+      { header: "Customer Name", key: "customerName", width: 22 },
+      { header: "Phone", key: "phone", width: 16 },
+      { header: "Plan Name", key: "planName", width: 24 },
+      { header: "Amount (INR)", key: "amount", width: 15 },
+      { header: "Platform Fee", key: "platformFee", width: 14 },
+      { header: "Status", key: "status", width: 12 },
+      { header: "Franchise (Account ID)", key: "accountId", width: 24 },
+      { header: "Group ID", key: "groupId", width: 14 },
+      { header: "Paid At", key: "paidAt", width: 22 },
+      { header: "Created At", key: "createdAt", width: 22 },
+      { header: "Plan Start Date", key: "planStartDate", width: 18 },
+      { header: "Plan End Date", key: "planEndDate", width: 18 },
+    ];
+
+    // Style header row
+    const headerRow = sheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.fill = headerFill;
+      cell.font = headerFont;
+      cell.alignment = headerAlignment;
+      cell.border = borderStyle;
+    });
+    headerRow.height = 28;
+
+    // Status colors
+    const statusColors = {
+      SUCCESS: "FF22C55E", // green
+      PENDING: "FFF59E0B", // amber
+      FAILED: "FFEF4444",  // red
+    };
+
+    // ── Add rows ──────────────────────────────────────────────
+    items.forEach((item, index) => {
+      const mapped = mapPaymentHistoryDoc(
+        { ...item, toObject: () => item },
+        resolveCustomer({ ...item, toObject: () => item })
+      );
+
+      const customerName =
+        item.paidByName ||
+        item.paidByUserName ||
+        mapped?.customer?.userName ||
+        mapped?.customer?.name ||
+        "--";
+
+      const phone =
+        item.paidByPhone ||
+        mapped?.customer?.phoneNumber ||
+        "--";
+
+      const formatDate = (val) => {
+        if (!val) return "--";
+        return new Date(val).toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      };
+
+      const row = sheet.addRow({
+        no: index + 1,
+        paymentId: String(item._id || "--"),
+        orderId: item.razorpayOrderId || "--",
+        customerName,
+        phone,
+        planName: mapped?.planName || item.planName || "--",
+        amount: Number(item.planAmount || 0),
+        platformFee: Number(item.platformFee || 0),
+        status: item.status || "--",
+        accountId: item.accountId || "--",
+        groupId: item.groupId || "--",
+        paidAt: formatDate(item.paidAt),
+        createdAt: formatDate(item.createdAt),
+        planStartDate: mapped?.planStartDate
+          ? new Date(mapped.planStartDate).toLocaleDateString("en-IN")
+          : "--",
+        planEndDate: mapped?.planEndDate
+          ? new Date(mapped.planEndDate).toLocaleDateString("en-IN")
+          : "--",
+      });
+
+      // Alternate row background
+      const rowBg = index % 2 === 0 ? "FFFAFAFA" : "FFFFFFFF";
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+        cell.border = borderStyle;
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: rowBg },
+        };
+      });
+
+      // Color status cell
+      const statusCell = row.getCell("status");
+      const color = statusColors[item.status] || "FF6B7280";
+      statusCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: color + "33" }, // light tint
+      };
+      statusCell.font = {
+        bold: true,
+        color: { argb: color },
+      };
+      statusCell.alignment = { horizontal: "center", vertical: "middle" };
+
+      row.height = 20;
+    });
+
+    // ── Freeze top row ─────────────────────────────────────────
+    sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    // ── Auto-filter ────────────────────────────────────────────
+    sheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: sheet.columns.length },
+    };
+
+    // ── Summary sheet ──────────────────────────────────────────
+    const summarySheet = workbook.addWorksheet("Summary");
+    summarySheet.columns = [
+      { header: "Metric", key: "metric", width: 30 },
+      { header: "Value", key: "value", width: 25 },
+    ];
+    ["A1", "B1"].forEach((ref) => {
+      const cell = summarySheet.getCell(ref);
+      cell.fill = headerFill;
+      cell.font = headerFont;
+      cell.alignment = headerAlignment;
+      cell.border = borderStyle;
+    });
+
+    const successItems = items.filter((i) => i.status === "SUCCESS");
+    const pendingItems = items.filter((i) => i.status === "PENDING");
+    const failedItems = items.filter((i) => i.status === "FAILED");
+    const totalRevenue = successItems.reduce(
+      (s, i) => s + Number(i.planAmount || 0),
+      0
+    );
+
+    const exportType =
+      selectedIdsList.length > 0
+        ? `Selected Items (${items.length} records)`
+        : Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? `Page ${parsedPage} (${items.length} records)`
+        : `All Filtered (${items.length} records)`;
+
+    const summaryRows = [
+      ["Export Type", exportType],
+      ["Total Records Exported", items.length],
+      ["Paid (SUCCESS)", successItems.length],
+      ["Pending", pendingItems.length],
+      ["Failed", failedItems.length],
+      ["Total Revenue (INR)", `₹${totalRevenue.toLocaleString("en-IN")}`],
+      ["Filters Applied", ""],
+      ["  Status", status || "All"],
+      ["  Franchise (accountId)", query.accountId || "All"],
+      ["  From Date", fromDate || "--"],
+      ["  To Date", toDate || "--"],
+      ["  Search", search || "--"],
+      ["Downloaded At", new Date().toLocaleString("en-IN")],
+    ];
+
+    summaryRows.forEach(([metric, value], i) => {
+      const r = summarySheet.addRow({ metric, value });
+      r.eachCell((cell) => {
+        cell.border = borderStyle;
+        cell.alignment = { vertical: "middle" };
+        const bg = i % 2 === 0 ? "FFFAFAFA" : "FFFFFFFF";
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+      });
+      r.height = 20;
+    });
+
+    // ── Stream response ───────────────────────────────────────
+    const fileName = `payment_history_${Date.now()}.xlsx`;
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    return next(error);
+  }
+};
+
+
