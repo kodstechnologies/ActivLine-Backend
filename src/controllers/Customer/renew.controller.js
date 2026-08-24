@@ -54,14 +54,18 @@ export const renew = asyncHandler(async (req, res) => {
   const payload = req.body || {};
 
   const userId = payload.userId;
-  const renewDefaultSettings = payload.renewDefaultSettings;
-  const isRenewPresentDate = payload.isRenewPresentDate;
 
-  if (!userId || !renewDefaultSettings || !isRenewPresentDate) {
-    throw new ApiError(
-      400,
-      "userId, renewDefaultSettings, and isRenewPresentDate are required",
-    );
+  // Only userId is strictly required; other fields have sensible defaults
+  if (!userId) {
+    throw new ApiError(400, "userId is required");
+  }
+
+  // Apply defaults if not provided by the client
+  if (payload.renewDefaultSettings === undefined || payload.renewDefaultSettings === null || payload.renewDefaultSettings === "") {
+    payload.renewDefaultSettings = true;
+  }
+  if (payload.isRenewPresentDate === undefined || payload.isRenewPresentDate === null || payload.isRenewPresentDate === "") {
+    payload.isRenewPresentDate = 1;
   }
 
   const activlineResponse = await renewUserPlan(payload);

@@ -35,6 +35,9 @@ export const notifyFranchiseAdmins = async ({
   const uniqueTokens = [...new Set(tokens)];
 
   if (uniqueTokens.length > 0) {
+    if (!firebaseAdmin) {
+      console.warn("⚠️ FCM multicast skipped: Firebase Admin SDK is not initialized.");
+    } else {
     const response = await firebaseAdmin.messaging().sendEachForMulticast(
       buildFcmMulticastMessage({
         tokens: uniqueTokens,
@@ -64,7 +67,8 @@ export const notifyFranchiseAdmins = async ({
         }))
       );
     }
-  }
+    } // end else (firebaseAdmin is initialized)
+  } // end if (uniqueTokens.length > 0)
 
   return notifications;
 };
