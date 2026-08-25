@@ -1,5 +1,6 @@
 import Notification from "../../models/Notification/customernotification.model.js";
 import CustomerSession from "../../models/Customer/customerLogin.model.js";
+import Customer from "../../models/Customer/customer.model.js";
 import { sendPushNotification } from "./customerfirebase.service.js";
 
 export const notifyCustomer = async ({
@@ -18,26 +19,46 @@ export const notifyCustomer = async ({
     data,
   });
 
-  // 🔹 2️⃣ Fetch ALL active device tokens
+  // 🔹 2️⃣ Fetch active device tokens from Sessions
   const sessions = await CustomerSession.find({
     customerId,
-    fcmToken: { $ne: null },
-  }).select("fcmToken");
+    fcmToken: { $ne: null, $nin: ["", null] },
+  }).select("_id fcmToken");
 
-  if (!sessions.length) {
-    console.warn("⚠️ No active FCM sessions for customer:", customerId);
-    return notification; // No devices logged in
+  // Also check Customer document for fallback tokens
+  const customerDoc = await Customer.findById(customerId).select("fcmTokens fcmToken");
+  const docTokens = [
+    ...(customerDoc?.fcmTokens || []),
+    customerDoc?.fcmToken,
+  ].filter(Boolean);
+
+  const allTokens = [
+    ...sessions.map((s) => ({ token: s.fcmToken, sessionId: s._id })),
+    ...docTokens.map((t) => ({ token: t, sessionId: null })),
+  ];
+
+  // De-duplicate by token string
+  const uniqueTokensMap = new Map();
+  for (const item of allTokens) {
+    if (item.token && !item.token.startsWith("mock_token_") && !uniqueTokensMap.has(item.token)) {
+      uniqueTokensMap.set(item.token, item.sessionId);
+    }
+  }
+
+  if (!uniqueTokensMap.size) {
+    console.warn("⚠️ No active FCM tokens for customer:", customerId);
+    return notification;
   }
 
   // 🔹 3️⃣ Send notification to ALL devices
-  for (const session of sessions) {
+  for (const [token, sessionId] of uniqueTokensMap.entries()) {
     try {
       console.log("📨 Sending FCM to customer:", {
         customerId,
-        tokenPreview: String(session.fcmToken || "").slice(0, 12) + "...",
+        tokenPreview: String(token).slice(0, 15) + "...",
       });
       await sendPushNotification({
-        fcmToken: session.fcmToken,
+        fcmToken: token,
         title,
         body: message,
         data: {
@@ -46,15 +67,23 @@ export const notifyCustomer = async ({
         },
       });
     } catch (error) {
-      console.error("❌ FCM Send Error:", error.message);
+      console.error("❌ FCM Send Error:", error?.code, error?.message);
 
-      // 🔥 4️⃣ Auto cleanup invalid tokens
+      // 🔥 4️⃣ Auto cleanup invalid / uninstalled tokens
       if (
-        error.code === "messaging/registration-token-not-registered"
+        error?.code === "messaging/registration-token-not-registered" ||
+        error?.code === "messaging/invalid-registration-token" ||
+        error?.message?.includes("NotRegistered")
       ) {
-        await CustomerSession.updateOne(
-          { _id: session._id },
-          { $set: { fcmToken: null } }
+        if (sessionId) {
+          await CustomerSession.updateOne(
+            { _id: sessionId },
+            { $set: { fcmToken: null } }
+          );
+        }
+        await Customer.updateOne(
+          { _id: customerId },
+          { $pull: { fcmTokens: token } }
         );
       }
     }

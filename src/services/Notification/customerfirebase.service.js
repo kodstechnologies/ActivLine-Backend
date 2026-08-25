@@ -22,7 +22,9 @@ export const sendPushNotification = async ({ fcmToken, title, body, data }) => {
     );
 
     console.log("✅ Push notification sent", { messageId: response });
+    return response;
   } catch (err) {
-    console.error("❌ Firebase error:", err.message);
+    console.error("❌ Firebase error:", err.code, err.message);
+    throw err;
   }
 };
