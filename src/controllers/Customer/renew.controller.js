@@ -112,8 +112,8 @@ export const renew = asyncHandler(async (req, res) => {
       if (customer?._id) {
         await notifyCustomer({
           customerId: customer._id,
-          title: "Plan Recharge सफल",
-          message: "आपका प्लान सफलतापूर्वक रिचार्ज हो गया है।",
+          title: "Plan Recharge Successful",
+          message: "Your plan has been recharged successfully.",
           type: "PLAN_RENEW",
           data: {
             activlineUserId: customer.activlineUserId || null,
