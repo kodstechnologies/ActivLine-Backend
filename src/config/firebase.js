@@ -42,7 +42,36 @@ const formatPrivateKey = (key) => {
 };
 
 const resolveServiceAccount = () => {
-  // 1. Check if a JSON file path is specified
+  // 1. Direct from .env JSON string (Primary)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      return { serviceAccount: parsed, source: ".env (FIREBASE_SERVICE_ACCOUNT)" };
+    } catch (err) {
+      console.warn("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON from .env:", err.message);
+    }
+  }
+
+  // 2. Direct from individual .env variables
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECTID;
+  const clientEmail =
+    process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_CLIENTEMAIL;
+  const privateKey =
+    process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATEKEY;
+
+  if (projectId && clientEmail && privateKey) {
+    return {
+      serviceAccount: {
+        projectId,
+        clientEmail,
+        privateKey: formatPrivateKey(privateKey),
+      },
+      source: ".env variables",
+    };
+  }
+
+  // 3. Fallback to file if present
   const serviceAccountPath =
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
     (fs.existsSync(path.resolve(process.cwd(), "serviceAccountKey.json"))
@@ -63,35 +92,6 @@ const resolveServiceAccount = () => {
         err.message
       );
     }
-  }
-
-  // 2. Check if a raw JSON string is provided in env
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    try {
-      const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      return { serviceAccount: parsed, source: "env JSON string" };
-    } catch (err) {
-      console.warn("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON string");
-    }
-  }
-
-  // 3. Check individual environment variables
-  const projectId =
-    process.env.FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECTID;
-  const clientEmail =
-    process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_CLIENTEMAIL;
-  const privateKey =
-    process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_PRIVATEKEY;
-
-  if (projectId && clientEmail && privateKey) {
-    return {
-      serviceAccount: {
-        projectId,
-        clientEmail,
-        privateKey: formatPrivateKey(privateKey),
-      },
-      source: "env variables",
-    };
   }
 
   return { serviceAccount: null, source: null };
