@@ -27,8 +27,12 @@ const buildCommonPayload = ({ title, body, data, link, icon, channelId }) => {
     android: {
       priority: "high",
       notification: {
-        channelId: channelId || "default",
+        channelId: channelId || "high_importance_channel",
         sound: "default",
+        priority: "max",
+        defaultSound: true,
+        defaultVibrateTimings: true,
+        visibility: "public",
       },
     },
     apns: {
@@ -37,7 +41,12 @@ const buildCommonPayload = ({ title, body, data, link, icon, channelId }) => {
       },
       payload: {
         aps: {
+          alert: {
+            title: safeTitle,
+            body: safeBody,
+          },
           sound: "default",
+          badge: 1,
           contentAvailable: true,
         },
       },
