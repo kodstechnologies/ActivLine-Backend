@@ -40,6 +40,10 @@ export const notifyCustomer = async ({
         fcmToken: session.fcmToken,
         title,
         body: message,
+        data: {
+          type,
+          ...data,
+        },
       });
     } catch (error) {
       console.error("❌ FCM Send Error:", error.message);

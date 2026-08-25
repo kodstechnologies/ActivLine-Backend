@@ -3,7 +3,7 @@
 import { firebaseAdmin as admin } from "../../config/firebase.js";
 import { buildFcmMessage } from "../../utils/fcmPayload.js";
 
-export const sendPushNotification = async ({ fcmToken, title, body }) => {
+export const sendPushNotification = async ({ fcmToken, title, body, data }) => {
   if (!fcmToken) return;
 
   if (!admin) {
@@ -17,6 +17,7 @@ export const sendPushNotification = async ({ fcmToken, title, body }) => {
         token: fcmToken,
         title,
         body,
+        data,
       })
     );
 

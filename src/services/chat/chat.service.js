@@ -576,14 +576,23 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
 
   // ✅ 🔔 NOTIFY CUSTOMER (ALL STATUS CHANGES)
   try {
+    const statusTitleMap = {
+      OPEN: "Ticket Opened",
+      ASSIGNED: "Ticket Assigned",
+      IN_PROGRESS: "Ticket In Progress",
+      RESOLVED: "Ticket Resolved",
+      CLOSED: "Ticket Closed",
+    };
+
     const statusMessageMap = {
       OPEN: "Your support ticket is open",
       ASSIGNED: "Your support ticket has been assigned",
       IN_PROGRESS: "Your support ticket is in progress",
-      RESOLVED: "✅ Your issue has been resolved",
+      RESOLVED: "Your issue has been resolved",
       CLOSED: "Your support ticket has been closed",
     };
 
+    const notificationTitle = statusTitleMap[newStatus] || "Ticket Update";
     const baseMessage =
       statusMessageMap[newStatus] || `Ticket status updated to ${newStatus}`;
 
@@ -591,7 +600,7 @@ export const updateTicketStatus = async (req, roomId, newStatus) => {
       customerId: room.customer._id, // IMPORTANT
       type: "TICKET",
       data: { roomId, ticketId: roomId, status: newStatus },
-      title: firstCustomerMsg?.message || "Ticket Update",
+      title: notificationTitle,
       message: `${baseMessage} (Ticket ID: ${roomId})`,
     });
   } catch (err) {
@@ -959,8 +968,8 @@ export const resolveTicketByCustomer = async (req, roomId) => {
     customerId: room.customer._id,
     type: "TICKET",
     data: { roomId, ticketId: roomId, status: "RESOLVED" },
-    title: firstCustomerMsg?.message || "Ticket Update",
-    message: `✅ Your issue has been resolved (Ticket ID: ${roomId})`,
+    title: "Ticket Resolved",
+    message: `Your issue has been resolved (Ticket ID: ${roomId})`,
   });
 
   if (room.customer?.phoneNumber) {
