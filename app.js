@@ -55,7 +55,7 @@ app.get("/test", (req, res) => {
   // Send it in the response
   res.json({
     success: true,
-    message: `Server is workinggg!`,
+    message: `Server is working!`,
     timestamp: new Date().toISOString(),
   });
 });
