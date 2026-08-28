@@ -1,4 +1,4 @@
-name: Deploy ActivLine-Backend
+name: Deplooy ActivLine-Backend
 
 on:
   push:
