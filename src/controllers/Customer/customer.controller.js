@@ -1117,19 +1117,18 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
         throw new ApiError(403, "Access Denied. Invalid accountId.");
       }
 
-      const updatedCustomer = await Customer.findByIdAndUpdate(
-        me._id,
+      await Customer.updateMany(
+        { accountId },
         { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
-        { new: true },
-      ).select("_id accountId maintenance");
+      );
 
       return res.status(200).json(
         ApiResponse.success(
           {
-            customerId: updatedCustomer._id,
-            accountId: updatedCustomer.accountId,
-            firstDate: updatedCustomer.maintenance?.lastDate || null,
-            endDate: updatedCustomer.maintenance?.endDate || null,
+            customerId: me._id,
+            accountId: me.accountId,
+            firstDate: null,
+            endDate: null,
           },
           "Customer maintenance dates deleted successfully",
         ),
@@ -1154,19 +1153,18 @@ export const deleteCustomerMaintenanceDatesByAccountId = asyncHandler(
       );
     }
 
-    const updatedCustomer = await Customer.findOneAndUpdate(
+    await Customer.updateMany(
       { accountId },
       { $unset: { "maintenance.lastDate": "", "maintenance.endDate": "" } },
-      { new: true },
-    ).select("_id accountId maintenance");
+    );
 
     return res.status(200).json(
       ApiResponse.success(
         {
-          customerId: updatedCustomer._id,
-          accountId: updatedCustomer.accountId,
-          firstDate: updatedCustomer.maintenance?.lastDate || null,
-          endDate: updatedCustomer.maintenance?.endDate || null,
+          customerId: customer._id,
+          accountId: customer.accountId,
+          firstDate: null,
+          endDate: null,
         },
         "Customer maintenance dates deleted successfully",
       ),
