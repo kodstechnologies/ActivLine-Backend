@@ -385,12 +385,17 @@ export const fetchProfilesWithDetailsByFranchise = async (accountId, options = {
       return typeFilters.length === 0 || typeFilters.includes(packageType);
     });
 
+    // Graceful fallback: if the type filter yields no results (e.g. customer
+    // userType "business" doesn't match any Activline "Package Type" like
+    // "Broadband" / "FTTH"), return all plans so the admin always sees options.
+    const resultItems = filtered.length > 0 ? filtered : itemsWithDetails;
+
     const page = toPositiveInt(options.page, 1);
     const limit = Math.min(toPositiveInt(options.limit, 20), 200);
-    const total = filtered.length;
+    const total = resultItems.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const skip = (page - 1) * limit;
-    const items = filtered.slice(skip, skip + limit);
+    const items = resultItems.slice(skip, skip + limit);
 
     return {
       isSingle: false,
