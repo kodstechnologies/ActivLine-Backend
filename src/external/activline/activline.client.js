@@ -2,17 +2,21 @@ import axios from "axios";
 import activlineConfig from "../../config/Jaze_API/Ticket/activline.config.js";
 import ApiError from "../../utils/ApiError.js";
 
-const basicAuth = Buffer
-  .from(`${activlineConfig.username}:${activlineConfig.password}`)
-  .toString("base64");
-
 const activlineClient = axios.create({
   baseURL: activlineConfig.baseURL,
   timeout: activlineConfig.timeout,
   headers: {
-    Authorization: `Basic ${basicAuth}`,
     Accept: "application/json",
   },
+});
+
+activlineClient.interceptors.request.use((config) => {
+  const basicAuth = Buffer
+    .from(`${activlineConfig.username}:${activlineConfig.password}`)
+    .toString("base64");
+  config.headers = config.headers || {};
+  config.headers.Authorization = `Basic ${basicAuth}`;
+  return config;
 });
 
 activlineClient.interceptors.response.use(

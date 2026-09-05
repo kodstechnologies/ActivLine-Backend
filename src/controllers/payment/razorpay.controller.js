@@ -14,6 +14,7 @@ import { fileURLToPath } from "url";
 import { uploadToS3, getS3DownloadUrl } from "../../utils/s3Upload.js";
 import puppeteer from "puppeteer";
 import { generateInvoiceHTML } from "../../utils/invoiceTemplate.js";
+import { generateInvoicePdf } from "../../services/pdf/invoicePdf.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1998,7 +1999,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
 
     const filename = `invoice_${paymentData.paymentId}.pdf`;
 
-    const htmlContent = generateInvoiceHTML({
+    const invoicePayload = {
       paymentId: paymentData.paymentId,
       date: paymentData.paidAt || paymentData.createdAt,
       planStartDate: paymentData?.planStartDate,
@@ -2009,29 +2010,10 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
       plan: paymentData.plan,
       previousBalance: 0,
       taxRate: 0.09,
-    });
+    };
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-
-    const page = await browser.newPage();
-    await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-
-    const pdfUint8Array = await page.pdf({
-      width: "595px",
-      height: "986px",
-
-      printBackground: true,
-      margin: { top: "0px", right: "0px", bottom: "0px", left: "0px" },
-      pageRanges: "1",
-    });
-
-    await browser.close();
-
-    // Convert Puppeteer's Uint8Array to a Node.js Buffer for S3 upload
-    const pdfBuffer = Buffer.from(pdfUint8Array);
+    const htmlContent = generateInvoiceHTML(invoicePayload);
+    const pdfBuffer = await generateInvoicePdf(invoicePayload, htmlContent);
 
     const uploadResult = await uploadToS3({
       buffer: pdfBuffer,

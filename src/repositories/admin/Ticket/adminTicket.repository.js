@@ -1,5 +1,5 @@
 
-import activlineClient from "../../../config/Jaze_API/Ticket/activline.config.js";
+import activlineClient from "../../../external/activline/activline.client.js";
 
 export const getTicketsFromActivline = async (formData) => {
   const response = await activlineClient.post(

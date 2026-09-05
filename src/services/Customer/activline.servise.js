@@ -5,10 +5,14 @@ import activlineConfig from "../../config/Jaze_API/Ticket/activline.config.js";
 const activlineClient = axios.create({
   baseURL: activlineConfig.baseURL,
   timeout: activlineConfig.timeout,
-  auth: {
+});
+
+activlineClient.interceptors.request.use((config) => {
+  config.auth = {
     username: activlineConfig.username,
     password: activlineConfig.password,
-  },
+  };
+  return config;
 });
 
 export const getUsersFromActivline = async (page, perPage) => {
