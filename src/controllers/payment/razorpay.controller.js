@@ -871,15 +871,15 @@ export const createPlanOrder = async (req, res, next) => {
       customerDoc = resolvedCustomer || null;
     }
 
-    // paidByPatch must only come from explicit body fields (userName or phoneNumber)
-    // or from the authenticated JWT user. NEVER auto-resolve from plan ownership.
-    if (!paidByPatch) {
-      return res.status(400).json({
-        success: false,
-        message: "userName or phoneNumber is required",
-      });
+    // paidByPatch comes from explicit body fields (userName or phoneNumber)
+    // or from the authenticated JWT user.
+    // If none were supplied, fall back to the resolved customerDoc so the order
+    // can still be returned — the paidBy fields can be backfilled on verify.
+    if (!paidByPatch && customerDoc) {
+      paidByPatch = toPaidBySnapshot(customerDoc);
     }
 
+    // Only update if we actually have something to patch — never write nulls.
     if (paidByPatch) {
       await PaymentHistory.updateOne(
         { razorpayOrderId: order.id },
