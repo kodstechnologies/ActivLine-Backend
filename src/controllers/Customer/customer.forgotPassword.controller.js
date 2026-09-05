@@ -6,7 +6,8 @@ import { sendOTPEmail } from "../../utils/mail.util.js";
 import sendSMS from "../../utils/sendSMS.js";
 
 export const forgotPassword = asyncHandler(async (req, res) => {
-  const { identifier } = req.body;
+  const rawIdentifier = req.body.identifier;
+  const identifier = typeof rawIdentifier === "string" ? rawIdentifier.trim() : "";
 
   if (!identifier) {
     throw new ApiError(400, "Email or phone number is required");

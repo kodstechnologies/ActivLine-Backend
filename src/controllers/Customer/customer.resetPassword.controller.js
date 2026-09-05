@@ -5,7 +5,9 @@ import { sendMessage } from "../../utils/sendMessage.js";
 import { SMS_TEMPLATE_ID } from "../../constants/sms_template_id.js";
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  const { identifier, otp, newPassword, reenterPassword } = req.body;
+  const rawIdentifier = req.body.identifier;
+  const identifier = typeof rawIdentifier === "string" ? rawIdentifier.trim() : "";
+  const { otp, newPassword, reenterPassword } = req.body;
 
   // 1️⃣ Validate inputs
   if (!identifier || !otp || !newPassword || !reenterPassword) {

@@ -61,21 +61,19 @@ export const generateInvoicePdfWithPdfKit = (data) => {
       const baseAmount = rawAmount / (1 + taxRate * 2);
       const taxAmount = baseAmount * taxRate;
 
-      const formattedDate = data.date
-        ? new Date(data.date).toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })
-        : "-";
+      const formatSafeDate = (value) => {
+        if (!value) return "-";
+        const d = new Date(value);
+        if (isNaN(d.getTime())) return "-";
+        return d.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+      };
 
-      const planExpiry = data.planEndDate
-        ? new Date(data.planEndDate).toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })
-        : "-";
+      const formattedDate = formatSafeDate(data.date);
+      const planExpiry = formatSafeDate(data.planEndDate);
 
       // Try loading logo
       const logoPath = path.join(__dirname, "..", "..", "logo", "invoice_logo.png");
