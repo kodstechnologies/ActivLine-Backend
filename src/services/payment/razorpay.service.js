@@ -18,6 +18,8 @@ if (keyId && keySecret) {
   );
 }
 
+import ApiError from "../../utils/ApiError.js";
+
 export const createRazorpayOrder = async ({
   amount,
   currency = "INR",
@@ -25,14 +27,28 @@ export const createRazorpayOrder = async ({
   notes = {},
 }) => {
   if (!razorpay) {
-    throw new Error("Razorpay is not configured. Cannot create order.");
+    throw new ApiError(500, "Razorpay is not configured. RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing.");
   }
-  return await razorpay.orders.create({
-    amount: Math.round(amount * 100),
-    currency,
-    receipt,
-    notes,
-  });
+  try {
+    return await razorpay.orders.create({
+      amount: Math.round(amount * 100),
+      currency,
+      receipt,
+      notes,
+    });
+  } catch (error) {
+    const errorMsg =
+      error?.error?.description ||
+      error?.description ||
+      error?.message ||
+      "Failed to create Razorpay order";
+    const statusCode = error?.statusCode || error?.status || 500;
+    console.error("❌ Razorpay order creation failed:", error);
+    throw new ApiError(
+      statusCode,
+      `Razorpay payment gateway error: ${errorMsg}`
+    );
+  }
 };
 
 export const verifyRazorpaySignature = ({

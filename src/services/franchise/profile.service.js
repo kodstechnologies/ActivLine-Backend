@@ -2,6 +2,8 @@ import axios from "axios";
 import Franchise from "../../models/Franchise/franchise.model.js";
 import { fetchProfileDetails } from "./profileDetails.service.js";
 import { getGroupDetails } from "./groupDetails.service.js";
+import ApiError from "../../utils/ApiError.js";
+import { syncFranchiseData } from "./franchise.service.js";
 
 const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
@@ -20,10 +22,19 @@ const pickProfileType = (profile) =>
 export const fetchProfilesByFranchise = async (accountId, options = {}) => {
 
   // get franchise from DB
-  const franchise = await Franchise.findOne({ accountId });
+  let franchise = await Franchise.findOne({ accountId });
 
   if (!franchise) {
-    throw new Error("Franchise not found");
+    try {
+      await syncFranchiseData();
+      franchise = await Franchise.findOne({ accountId });
+    } catch (syncErr) {
+      console.error("Auto sync franchise failed in profiles:", syncErr.message);
+    }
+  }
+
+  if (!franchise) {
+    throw new ApiError(404, `Franchise not found for accountId: "${accountId}".`);
   }
 
   const username = franchise.accountName;
