@@ -600,8 +600,10 @@ export const getAssignedCustomerPaymentHistory = async (requester, query = {}) =
   }
 
   const filter = { $or: orFilters };
-  if (status && ["PENDING", "SUCCESS", "FAILED"].includes(status)) {
+  if (status && ["SUCCESS", "FAILED"].includes(status)) {
     filter.status = status;
+  } else if (!status || status === "ALL") {
+    filter.status = { $nin: ["PENDING", "CREATED"] };
   }
   if (planName) {
     filter.planName = { $regex: planName, $options: "i" };
@@ -922,6 +924,7 @@ export const getAssignedCustomerById = async (requester, customerId, query = {})
       customer.userGroupId ? { groupId: String(customer.userGroupId) } : null,
       customer.activlineUserId ? { profileId: String(customer.activlineUserId) } : null,
     ].filter(Boolean),
+    status: { $nin: ["PENDING", "CREATED"] },
   };
 
   const paymentSkip = (paymentPage - 1) * paymentLimit;

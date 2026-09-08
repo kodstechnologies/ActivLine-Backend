@@ -456,6 +456,7 @@ export const getCustomerOverviewByUserName = asyncHandler(async (req, res) => {
         ? { profileId: String(customer.activlineUserId) }
         : null,
     ].filter(Boolean),
+    status: { $nin: ["PENDING", "CREATED"] },
   };
 
   const paymentSkip =

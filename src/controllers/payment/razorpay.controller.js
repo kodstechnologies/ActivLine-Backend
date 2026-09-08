@@ -1294,9 +1294,11 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
 
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     if (date || fromDate || toDate) {
@@ -1478,9 +1480,11 @@ export const getPaymentHistoryByCustomerId = async (req, res, next) => {
 
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     if (date || fromDate || toDate) {
@@ -1643,9 +1647,11 @@ export const getPaymentHistoryByCustomerUserName = async (req, res, next) => {
 
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     if (date || fromDate || toDate) {
@@ -2102,9 +2108,11 @@ export const getPlanPaymentHistoryByGroup = async (req, res, next) => {
 
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     if (date || fromDate || toDate) {
@@ -2492,9 +2500,11 @@ export const getPaymentHistoryByPhone = async (req, res, next) => {
     if (planName) query.planName = { $regex: planName, $options: "i" };
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
     if (date || fromDate || toDate) {
       query.createdAt = {};
@@ -2713,9 +2723,11 @@ export const getAllPlanPaymentHistory = async (req, res, next) => {
 
     if (status) {
       const upperStatus = status.toUpperCase();
-      if (["PENDING", "SUCCESS", "FAILED"].includes(upperStatus)) {
+      if (["SUCCESS", "FAILED"].includes(upperStatus)) {
         query.status = upperStatus;
       }
+    } else {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     if (date || fromDate || toDate) {
@@ -2966,8 +2978,10 @@ export const downloadPaymentHistoryExcel = async (req, res, next) => {
     }
 
     // 3. Status filter
-    if (status && ["SUCCESS", "PENDING", "FAILED"].includes(status)) {
+    if (status && ["SUCCESS", "FAILED"].includes(status)) {
       query.status = status;
+    } else if (!status || status === "All") {
+      query.status = { $nin: ["PENDING", "CREATED"] };
     }
 
     // 4. Group & Plan filters

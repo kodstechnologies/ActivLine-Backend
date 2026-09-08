@@ -103,7 +103,10 @@ const buildPaymentQuery = (userName, customerId) => {
   if (customerId) {
     orClauses.push({ paidByCustomerId: customerId });
   }
-  return { $or: orClauses };
+  return {
+    $or: orClauses,
+    status: { $nin: ["PENDING", "CREATED"] },
+  };
 };
 
 const mapPaymentRow = (doc) => {
