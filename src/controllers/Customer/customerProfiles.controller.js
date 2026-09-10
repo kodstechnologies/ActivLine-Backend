@@ -214,7 +214,53 @@ export const getCustomerProfiles = asyncHandler(async (req, res) => {
       customer.profileName ||
       customer.planName ||
       (profileId ? `Plan ${profileId}` : "Current Plan");
-    const amount = customer.planAmount ? Number(customer.planAmount) : null;
+    let amount = customer.planAmount ? Number(customer.planAmount) : null;
+    if (!amount || amount <= 0) {
+      const allProfiles = profileResult.items || (profileResult.item ? [profileResult.item] : []);
+      for (const item of allProfiles) {
+        const pId = String(item?.Profile?.id || item?.id || "").trim();
+        const pName = String(item?.Profile?.name || item?.name || "").trim().toLowerCase();
+        const billingDetails =
+          item?.details?.["billing Details"] || item?.details?.billingDetails || [];
+        const billingPlanIdProp = Array.isArray(billingDetails)
+          ? billingDetails.find(
+              (d) => String(d?.property || "").toLowerCase() === "billingplanid",
+            )
+          : null;
+        const bPlanId = billingPlanIdProp
+          ? String(billingPlanIdProp.value || "").trim()
+          : "";
+
+        const isMatch =
+          (profileId &&
+            (pId === String(profileId) || bPlanId === String(profileId))) ||
+          (planName &&
+            pName &&
+            (planName.toLowerCase().includes(pName) ||
+              pName.includes(planName.toLowerCase())));
+
+        if (isMatch && Array.isArray(billingDetails)) {
+          const priceProp = billingDetails.find((d) =>
+            ["total price", "price", "rate", "amount"].includes(
+              String(d?.property || "").trim().toLowerCase(),
+            ),
+          );
+          if (
+            priceProp &&
+            priceProp.value !== undefined &&
+            priceProp.value !== null
+          ) {
+            const parsed = parseFloat(
+              String(priceProp.value).replace(/[^0-9.]/g, ""),
+            );
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              amount = parsed;
+              break;
+            }
+          }
+        }
+      }
+    }
 
     latestPurchasePayload = {
       paymentId: null,
