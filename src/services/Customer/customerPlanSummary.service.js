@@ -189,18 +189,21 @@ export const getCustomerPlanSummary = async (customerId) => {
     throw new ApiError(400, "Customer groupId is missing");
   }
 
-  const paymentQuery = {
+  const customerPaymentQuery = {
     status: "SUCCESS",
     $or: [
-      profileId ? { profileId } : null,
-      accountId ? { accountId } : null,
-      groupId ? { groupId } : null,
+      customer._id ? { paidByCustomerId: customer._id } : null,
+      customer.phoneNumber ? { paidByPhone: customer.phoneNumber } : null,
+      customer.userName ? { paidByUserName: customer.userName } : null,
+      customer.emailId ? { paidByEmail: customer.emailId } : null,
     ].filter(Boolean),
   };
 
-  const latestPaymentPromise = PaymentHistory.findOne(paymentQuery)
-    .sort({ paidAt: -1, createdAt: -1 })
-    .lean();
+  const latestPaymentPromise = customerPaymentQuery.$or.length
+    ? PaymentHistory.findOne(customerPaymentQuery)
+        .sort({ paidAt: -1, createdAt: -1 })
+        .lean()
+    : Promise.resolve(null);
 
   let groupIds = groupId ? [groupId] : [];
   let groupDetailRows = [];
@@ -222,7 +225,79 @@ export const getCustomerPlanSummary = async (customerId) => {
     .map((res) => extractPlansFromSubPlans(res))
     .flat();
 
-  const latestPayment = await latestPaymentPromise;
+  const parseDateSafe = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) return Number.isNaN(val.getTime()) ? null : val;
+    let d = new Date(val);
+    if (Number.isNaN(d.getTime()) && typeof val === "string") {
+      d = new Date(val.replace(" ", "T"));
+    }
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const razorpayDate = latestPaymentFromDb
+    ? parseDateSafe(latestPaymentFromDb.paidAt || latestPaymentFromDb.createdAt)
+    : null;
+
+  const hasJazePlan = Boolean(
+    customer.profileId ||
+      customer.planName ||
+      customer.rawPayload?.profile_id ||
+      customer.lastPaidDate ||
+      customer.activationDate
+  );
+
+  let jazePayment = null;
+  let jazeDate = null;
+
+  if (hasJazePlan) {
+    const pId = customer.profileId || customer.rawPayload?.profile_id || "";
+    const pName =
+      customer.rawPayload?.group_name ||
+      customer.profileName ||
+      customer.planName ||
+      (pId ? `Plan ${pId}` : "Current Plan");
+    const pAmount = customer.planAmount ? Number(customer.planAmount) : null;
+    const startDate =
+      customer.activationDate ||
+      customer.rawPayload?.activationTime ||
+      customer.rawPayload?.billingStartDate ||
+      null;
+    const endDate =
+      customer.expirationDate ||
+      customer.rawPayload?.expirationTime ||
+      customer.rawPayload?.billingEndDate ||
+      null;
+    const paidAt = customer.lastPaidDate || startDate || customer.createdAt;
+
+    jazeDate = parseDateSafe(paidAt);
+    jazePayment = {
+      _id: `jaze_${customer._id}`,
+      paymentId: `jaze_${customer._id}`,
+      source: "JAZE",
+      status: "SUCCESS",
+      planAmount: pAmount,
+      currency: "INR",
+      paidAt,
+      createdAt: customer.createdAt,
+      profileId: String(pId),
+      planName: pName,
+      planDetails: {
+        calculatedStartDate: startDate ? String(startDate).split(" ")[0] : null,
+        calculatedEndDate: endDate ? String(endDate).split(" ")[0] : null,
+      },
+    };
+  }
+
+  // Pick newest between Razorpay and JAZE
+  const preferRazorpay =
+    latestPaymentFromDb &&
+    (!jazeDate || (razorpayDate && razorpayDate.getTime() >= jazeDate.getTime()));
+
+  let latestPayment = preferRazorpay
+    ? latestPaymentFromDb
+    : jazePayment || latestPaymentFromDb || null;
+
   const latestProfileId = normalizeText(latestPayment?.profileId);
   const latestPlanNameKey = normalizeText(latestPayment?.planName).toLowerCase();
 

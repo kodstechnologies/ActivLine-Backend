@@ -540,6 +540,96 @@ const mapPaymentHistoryDoc = (doc, customer) => {
   };
 };
 
+const buildJazePaymentDoc = (customer) => {
+  if (
+    !customer ||
+    !(
+      customer.profileId ||
+      customer.planName ||
+      customer.rawPayload?.profile_id ||
+      customer.lastPaidDate ||
+      customer.activationDate
+    )
+  ) {
+    return null;
+  }
+
+  const pId = String(
+    customer.profileId || customer.rawPayload?.profile_id || "",
+  );
+  const pName =
+    customer.rawPayload?.group_name ||
+    customer.profileName ||
+    customer.planName ||
+    (pId ? `Plan ${pId}` : "Current Plan");
+  const pAmount = customer.planAmount ? Number(customer.planAmount) : 0;
+  const startDate =
+    customer.activationDate ||
+    customer.rawPayload?.activationTime ||
+    customer.rawPayload?.billingStartDate ||
+    null;
+  const endDate =
+    customer.expirationDate ||
+    customer.rawPayload?.expirationTime ||
+    customer.rawPayload?.billingEndDate ||
+    null;
+  const paidAt = customer.lastPaidDate || startDate || customer.createdAt;
+
+  const toIsoOrNull = (val) => {
+    if (!val) return null;
+    let d = new Date(val);
+    if (Number.isNaN(d.getTime()) && typeof val === "string") {
+      d = new Date(val.replace(" ", "T"));
+    }
+    return !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+  };
+
+  const resolvedCustomer = toCustomerSnapshot(customer);
+
+  return {
+    paymentId: `jaze_${customer._id}`,
+    orderId: null,
+    razorpayPaymentId: null,
+    source: "JAZE",
+    status: "SUCCESS",
+    isPaid: true,
+    amount: pAmount,
+    platformFee: 0,
+    currency: "INR",
+    groupId: String(customer.userGroupId || customer.rawPayload?.groupId || ""),
+    accountId: customer.accountId || customer.rawPayload?.company_name || null,
+    profileId: pId,
+    planName: pName,
+    planPeriodDays: null,
+    planStartDate: toIsoOrNull(startDate),
+    planEndDate: toIsoOrNull(endDate),
+    paidAt: toIsoOrNull(paidAt),
+    createdAt: toIsoOrNull(customer.createdAt),
+    updatedAt: toIsoOrNull(customer.updatedAt || customer.createdAt),
+    userName: customer.userName || null,
+    phoneNumber: customer.phoneNumber || null,
+    customer: resolvedCustomer,
+    paidBy: {
+      customerId: customer._id || null,
+      userName: customer.userName || null,
+      name: customer.firstName || customer.userName || null,
+      phoneNumber: customer.phoneNumber || null,
+      email: customer.emailId || null,
+    },
+    plan: {
+      profileId: pId,
+      planName: pName,
+      planAmount: pAmount,
+      planPeriodDays: null,
+      planStartDate: toIsoOrNull(startDate),
+      planEndDate: toIsoOrNull(endDate),
+      billingPlanId: null,
+      totalPrice: pAmount,
+      details: customer.rawPayload || {},
+    },
+  };
+};
+
 const buildCustomerIdentitySet = (customer) => {
   const ids = new Set();
 
@@ -679,21 +769,33 @@ export const createPlanOrder = async (req, res, next) => {
       });
     }
 
-    const profileRes = await getProfileDetails(profileId);
-    const profilePayload = profileRes?.message || profileRes || {};
-    const planName =
-      profilePayload?.name ||
-      profilePayload?.planName ||
-      profilePayload?.profileName ||
-      `plan_${profileId}`;
+    const devSkipJaze = process.env.DEV_SKIP_JAZE === "true";
+
+    let profilePayload = {};
+    let planName = `plan_${profileId}`;
+    let finalAmount = fallbackAmount;
+
+    if (devSkipJaze) {
+      // ── DEV MODE: skip Jaze API (IP not whitelisted locally) ──────────────
+      console.warn("⚠️  DEV_SKIP_JAZE=true — skipping Jaze profile/group validation. Do NOT use in production.");
+      planName = normalizeText(req.body?.planName) || `plan_${profileId}`;
+      finalAmount = fallbackAmount;
+    } else {
+      const profileRes = await getProfileDetails(profileId);
+      profilePayload = profileRes?.message || profileRes || {};
+      planName =
+        profilePayload?.name ||
+        profilePayload?.planName ||
+        profilePayload?.profileName ||
+        `plan_${profileId}`;
+      const amountFromPlan = extractAmount(profilePayload);
+      finalAmount =
+        Number.isFinite(amountFromPlan) && amountFromPlan > 0
+          ? amountFromPlan
+          : fallbackAmount;
+    }
 
     const billingMeta = getBillingMeta(profilePayload);
-
-    const amountFromPlan = extractAmount(profilePayload);
-    const finalAmount =
-      Number.isFinite(amountFromPlan) && amountFromPlan > 0
-        ? amountFromPlan
-        : fallbackAmount;
 
     if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
       return res.status(400).json({
@@ -720,30 +822,32 @@ export const createPlanOrder = async (req, res, next) => {
       });
     }
 
-    const groupDetailsRes = await getGroupDetails(finalAccountId);
-    const groupRows = extractRowsFromGroupDetails(groupDetailsRes);
-    const normalizedProfileId = normalizeText(profileId);
-    const hasProfileIdInRows = groupRows.some((row) =>
-      normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS)),
-    );
-
-    const hasValidMapping = groupRows.some((row) => {
-      const rowGroupId = normalizeText(extractTextByKeys(row, GROUP_ID_KEYS));
-      const rowProfileId = normalizeText(
-        extractTextByKeys(row, PROFILE_ID_KEYS),
+    if (!devSkipJaze) {
+      const groupDetailsRes = await getGroupDetails(finalAccountId);
+      const groupRows = extractRowsFromGroupDetails(groupDetailsRes);
+      const normalizedProfileId = normalizeText(profileId);
+      const hasProfileIdInRows = groupRows.some((row) =>
+        normalizeText(extractTextByKeys(row, PROFILE_ID_KEYS)),
       );
 
-      if (rowGroupId !== finalGroupId) return false;
-      if (!hasProfileIdInRows) return true;
-      return rowProfileId === normalizedProfileId;
-    });
+      const hasValidMapping = groupRows.some((row) => {
+        const rowGroupId = normalizeText(extractTextByKeys(row, GROUP_ID_KEYS));
+        const rowProfileId = normalizeText(
+          extractTextByKeys(row, PROFILE_ID_KEYS),
+        );
 
-    if (!hasValidMapping) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid accountId/groupId/profileId combination. Please pass values from franchise group-details.",
+        if (rowGroupId !== finalGroupId) return false;
+        if (!hasProfileIdInRows) return true;
+        return rowProfileId === normalizedProfileId;
       });
+
+      if (!hasValidMapping) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid accountId/groupId/profileId combination. Please pass values from franchise group-details.",
+        });
+      }
     }
 
     const platformFee =
@@ -1238,7 +1342,7 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
 
     const customer = await Customer.findById(customerId)
       .select(
-        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId planAmount planName profileName profileId lastPaidDate activationDate expirationDate rawPayload createdAt updatedAt",
       )
       .lean();
 
@@ -1283,6 +1387,9 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
       $or: [
         { paidByUserName: { $regex: `^${safeUserName}$`, $options: "i" } },
         { paidByName: { $regex: `^${safeUserName}$`, $options: "i" } },
+        ...(customer._id ? [{ paidByCustomerId: customer._id }] : []),
+        ...(customer.phoneNumber ? [{ paidByPhone: customer.phoneNumber }] : []),
+        ...(customer.emailId ? [{ paidByEmail: customer.emailId }] : []),
       ],
     };
 
@@ -1375,12 +1482,57 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
       notPaidCount: 0,
     };
 
+    const parseDateSafe = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return Number.isNaN(val.getTime()) ? null : val;
+      let d = new Date(val);
+      if (Number.isNaN(d.getTime()) && typeof val === "string") {
+        d = new Date(val.replace(" ", "T"));
+      }
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    let responseData = items.map((item) => {
+      const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
+      const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+      return rest;
+    });
+
+    let effectiveTotal = total;
+
+    const jazeDoc = buildJazePaymentDoc(customer);
+    if (jazeDoc && (!status || status === "SUCCESS")) {
+      const jazeDate = parseDateSafe(jazeDoc.paidAt || jazeDoc.createdAt);
+      // Check if this payment is already present among Razorpay payments (within 24h)
+      const isAlreadyInHistory = items.some((it) => {
+        const d = parseDateSafe(it.paidAt || it.createdAt);
+        return (
+          d &&
+          jazeDate &&
+          Math.abs(d.getTime() - jazeDate.getTime()) < 24 * 60 * 60 * 1000
+        );
+      });
+
+      if (!isAlreadyInHistory) {
+        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = jazeDoc;
+        responseData.push(rest);
+        // Sort newest first
+        responseData.sort((a, b) => {
+          const da = parseDateSafe(a.paidAt || a.createdAt) || 0;
+          const db = parseDateSafe(b.paidAt || b.createdAt) || 0;
+          return db - da;
+        });
+        effectiveTotal += 1;
+        statusSummary.SUCCESS = (statusSummary.SUCCESS || 0) + 1;
+      }
+    }
+
     return res.status(200).json({
       success: true,
       page,
       limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+      total: effectiveTotal,
+      totalPages: Math.ceil(effectiveTotal / limit),
       filters: {
         planName: planName || null,
         status: status || null,
@@ -1391,11 +1543,7 @@ export const getMyPlanPaymentHistory = async (req, res, next) => {
         userName: userNameOnly,
       },
       summary: statusSummary,
-      data: items.map((item) => {
-        const mapped = mapPaymentHistoryDoc(item, customerSnapshot);
-        const { customer, paidBy, plan, ...rest } = mapped || {};
-        return rest;
-      }),
+      data: responseData,
     });
   } catch (error) {
     return next(error);
@@ -1895,7 +2043,7 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
 
     const customer = await Customer.findById(customerId)
       .select(
-        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId planAmount planName profileName profileId lastPaidDate activationDate expirationDate rawPayload createdAt updatedAt",
       )
       .lean();
 
@@ -1905,40 +2053,64 @@ export const getMyLatestPlanPaymentHistory = async (req, res, next) => {
         message: "Customer not found",
       });
     }
-    const baseQuery = buildCustomerOwnershipQuery(customer);
-    if (!baseQuery) {
-      return res.status(200).json({
-        success: true,
-        data: null,
-      });
-    }
+
     const latestPayment = await PaymentHistory.findOne({
       status: "SUCCESS",
       $or: [
-        { paidByPhone: { $in: customer.phoneNumber } },
-        { paidByEmail: { $in: customer.emailId } },
-        { paidByCustomerId: { $in: [customer._id] } },
-        { paidByUserName: { $in: [customer.userName] } },
-        { paidByUserName: { $in: [customer.userName] } },
-      ],
+        customer.phoneNumber ? { paidByPhone: customer.phoneNumber } : null,
+        customer.emailId ? { paidByEmail: customer.emailId } : null,
+        customer._id ? { paidByCustomerId: customer._id } : null,
+        customer.userName ? { paidByUserName: customer.userName } : null,
+      ].filter(Boolean),
     }).sort({
       createdAt: -1,
     });
-    if (!latestPayment) {
+
+    const parseDateSafe = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return Number.isNaN(val.getTime()) ? null : val;
+      let d = new Date(val);
+      if (Number.isNaN(d.getTime()) && typeof val === "string") {
+        d = new Date(val.replace(" ", "T"));
+      }
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    const razorpayDate = latestPayment
+      ? parseDateSafe(latestPayment.paidAt || latestPayment.createdAt)
+      : null;
+
+    const jazePayment = buildJazePaymentDoc(customer);
+    const jazeDate = jazePayment
+      ? parseDateSafe(jazePayment.paidAt || jazePayment.createdAt)
+      : null;
+
+    // Pick whichever is newer: Razorpay or JAZE
+    if (
+      latestPayment &&
+      (!jazeDate || (razorpayDate && razorpayDate.getTime() >= jazeDate.getTime()))
+    ) {
+      const customerSnapshot = toCustomerSnapshot(customer);
+      const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
+      const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+
       return res.status(200).json({
         success: true,
-        data: null,
+        data: rest,
       });
     }
 
-    const customerSnapshot = toCustomerSnapshot(customer);
-
-    const mapped = mapPaymentHistoryDoc(latestPayment, customerSnapshot);
-    const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+    if (jazePayment) {
+      const { customer: _c, paidBy: _p, plan: _pl, ...rest } = jazePayment;
+      return res.status(200).json({
+        success: true,
+        data: rest,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      data: rest,
+      data: null,
     });
   } catch (error) {
     return next(error);
@@ -1966,7 +2138,7 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
 
     const customer = await Customer.findById(customerId)
       .select(
-        "accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId expirationDate",
+        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId planAmount planName profileName profileId lastPaidDate activationDate expirationDate rawPayload createdAt updatedAt",
       )
       .lean();
 
@@ -1977,24 +2149,37 @@ export const downloadMyPaymentInvoice = async (req, res, next) => {
       });
     }
 
-    const payment = await PaymentHistory.findById(paymentId);
+    let paymentData = null;
 
-    if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: "Payment details not found",
-      });
+    if (String(paymentId).startsWith("jaze_")) {
+      const jazeDoc = buildJazePaymentDoc(customer);
+      if (!jazeDoc) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment details not found",
+        });
+      }
+      paymentData = jazeDoc;
+    } else {
+      const payment = await PaymentHistory.findById(paymentId);
+
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          message: "Payment details not found",
+        });
+      }
+
+      if (!isPaymentOwnedByCustomer(payment, customer)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      const customerSnapshot = toCustomerSnapshot(customer);
+      paymentData = mapPaymentHistoryDoc(payment, customerSnapshot);
     }
-
-    if (!isPaymentOwnedByCustomer(payment, customer)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
-    }
-
-    const customerSnapshot = toCustomerSnapshot(customer);
-    const paymentData = mapPaymentHistoryDoc(payment, customerSnapshot);
 
     const formatDate = (value) => {
       if (!value) return "-";
@@ -2470,7 +2655,7 @@ export const getPaymentHistoryByPhone = async (req, res, next) => {
     // Try to find a registered customer with this phone number
     const customer = await Customer.findOne({ phoneNumber: phoneParam })
       .select(
-        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId",
+        "_id accountId userGroupId activlineUserId userName firstName lastName phoneNumber emailId planAmount planName profileName profileId lastPaidDate activationDate expirationDate rawPayload createdAt updatedAt",
       )
       .lean();
 
@@ -2567,12 +2752,55 @@ export const getPaymentHistoryByPhone = async (req, res, next) => {
       notPaidCount: 0,
     };
 
+    const parseDateSafe = (val) => {
+      if (!val) return null;
+      if (val instanceof Date) return Number.isNaN(val.getTime()) ? null : val;
+      let d = new Date(val);
+      if (Number.isNaN(d.getTime()) && typeof val === "string") {
+        d = new Date(val.replace(" ", "T"));
+      }
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    let responseData = items.map((item) => {
+      const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
+      const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
+      return rest;
+    });
+
+    let effectiveTotal = total;
+
+    const jazeDoc = buildJazePaymentDoc(customer);
+    if (jazeDoc && (!status || status === "SUCCESS")) {
+      const jazeDate = parseDateSafe(jazeDoc.paidAt || jazeDoc.createdAt);
+      const isAlreadyInHistory = items.some((it) => {
+        const d = parseDateSafe(it.paidAt || it.createdAt);
+        return (
+          d &&
+          jazeDate &&
+          Math.abs(d.getTime() - jazeDate.getTime()) < 24 * 60 * 60 * 1000
+        );
+      });
+
+      if (!isAlreadyInHistory) {
+        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = jazeDoc;
+        responseData.push(rest);
+        responseData.sort((a, b) => {
+          const da = parseDateSafe(a.paidAt || a.createdAt) || 0;
+          const db = parseDateSafe(b.paidAt || b.createdAt) || 0;
+          return db - da;
+        });
+        effectiveTotal += 1;
+        statusSummary.SUCCESS = (statusSummary.SUCCESS || 0) + 1;
+      }
+    }
+
     return res.status(200).json({
       success: true,
       page,
       limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+      total: effectiveTotal,
+      totalPages: Math.ceil(effectiveTotal / limit),
       filters: {
         phoneNumber: phoneParam,
         userName: customer?.userName || null,
@@ -2588,11 +2816,7 @@ export const getPaymentHistoryByPhone = async (req, res, next) => {
         pendingPaymentCount: totals.pendingCount,
         notPaidPaymentCount: totals.notPaidCount,
       },
-      data: items.map((item) => {
-        const mapped = mapPaymentHistoryDoc(item, resolveCustomer(item));
-        const { customer: _c, paidBy: _p, plan: _pl, ...rest } = mapped || {};
-        return rest;
-      }),
+      data: responseData,
     });
   } catch (error) {
     return next(error);

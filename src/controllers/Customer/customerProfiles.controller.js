@@ -84,7 +84,10 @@ const resolveCustomerForToken = async (tokenCustomerId, paramId) => {
 
 const formatToIST = (dateValue) => {
   if (!dateValue) return null;
-  const date = new Date(dateValue);
+  let date = new Date(dateValue);
+  if (Number.isNaN(date.getTime()) && typeof dateValue === "string") {
+    date = new Date(dateValue.replace(" ", "T"));
+  }
   if (Number.isNaN(date.getTime())) return null;
 
   const formatted = new Intl.DateTimeFormat("en-IN", {
@@ -133,32 +136,102 @@ export const getCustomerProfiles = asyncHandler(async (req, res) => {
     profileId,
   });
 
-  const paymentQuery = {
+  const customerPaymentQuery = {
     status: "SUCCESS",
     $or: [
-      customer.activlineUserId ? { profileId: customer.activlineUserId } : null,
-      customer.accountId ? { accountId: customer.accountId } : null,
-      customer.userGroupId ? { groupId: String(customer.userGroupId) } : null,
+      customer._id ? { paidByCustomerId: customer._id } : null,
+      customer.phoneNumber ? { paidByPhone: customer.phoneNumber } : null,
+      customer.userName ? { paidByUserName: customer.userName } : null,
+      customer.emailId ? { paidByEmail: customer.emailId } : null,
     ].filter(Boolean),
   };
 
-  const latestPurchase = await PaymentHistory.findOne(paymentQuery)
-    .sort({ paidAt: -1, createdAt: -1 })
-    .lean();
-
-  const latestPurchasePayload = latestPurchase
-    ? {
-        paymentId: String(latestPurchase._id),
-        status: latestPurchase.status,
-        amount: latestPurchase.planAmount,
-        currency: latestPurchase.currency,
-        paidAt: formatToIST(latestPurchase.paidAt),
-        createdAt: formatToIST(latestPurchase.createdAt),
-        profileId: latestPurchase.profileId,
-        planName: latestPurchase.planName,
-        planDetails: latestPurchase.planDetails || {},
-      }
+  const latestPurchase = customerPaymentQuery.$or.length
+    ? await PaymentHistory.findOne(customerPaymentQuery)
+        .sort({ paidAt: -1, createdAt: -1 })
+        .lean()
     : null;
+
+  const parseDateSafe = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) return Number.isNaN(val.getTime()) ? null : val;
+    let d = new Date(val);
+    if (Number.isNaN(d.getTime()) && typeof val === "string") {
+      d = new Date(val.replace(" ", "T"));
+    }
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const razorpayDate = latestPurchase
+    ? parseDateSafe(latestPurchase.paidAt || latestPurchase.createdAt)
+    : null;
+
+  const hasJazePlan = Boolean(
+    customer.profileId ||
+      customer.planName ||
+      customer.rawPayload?.profile_id ||
+      customer.lastPaidDate ||
+      customer.activationDate
+  );
+
+  const jazeStartDate =
+    customer.activationDate ||
+    customer.rawPayload?.activationTime ||
+    customer.rawPayload?.billingStartDate ||
+    null;
+  const jazeEndDate =
+    customer.expirationDate ||
+    customer.rawPayload?.expirationTime ||
+    customer.rawPayload?.billingEndDate ||
+    null;
+  const jazePaidAt = customer.lastPaidDate || jazeStartDate || customer.createdAt;
+  const jazeDate = hasJazePlan ? parseDateSafe(jazePaidAt) : null;
+
+  // Pick whichever is newer: Razorpay or JAZE
+  const preferRazorpay =
+    latestPurchase &&
+    (!jazeDate || (razorpayDate && razorpayDate.getTime() >= jazeDate.getTime()));
+
+  let latestPurchasePayload = null;
+
+  if (preferRazorpay) {
+    latestPurchasePayload = {
+      paymentId: String(latestPurchase._id),
+      status: latestPurchase.status,
+      amount: latestPurchase.planAmount,
+      currency: latestPurchase.currency,
+      paidAt: formatToIST(latestPurchase.paidAt),
+      createdAt: formatToIST(latestPurchase.createdAt),
+      profileId: latestPurchase.profileId,
+      planName: latestPurchase.planName,
+      planDetails: latestPurchase.planDetails || {},
+    };
+  } else if (hasJazePlan) {
+    const profileId =
+      customer.profileId || customer.rawPayload?.profile_id || "";
+    const planName =
+      customer.rawPayload?.group_name ||
+      customer.profileName ||
+      customer.planName ||
+      (profileId ? `Plan ${profileId}` : "Current Plan");
+    const amount = customer.planAmount ? Number(customer.planAmount) : null;
+
+    latestPurchasePayload = {
+      paymentId: null,
+      source: "JAZE",
+      status: "SUCCESS",
+      amount: amount,
+      currency: "INR",
+      paidAt: formatToIST(jazePaidAt),
+      createdAt: formatToIST(customer.createdAt),
+      profileId: String(profileId),
+      planName: planName,
+      planDetails: {
+        calculatedStartDate: jazeStartDate ? String(jazeStartDate).split(" ")[0] : null,
+        calculatedEndDate: jazeEndDate ? String(jazeEndDate).split(" ")[0] : null,
+      },
+    };
+  }
 
   if (profileResult.isSingle) {
     return res.status(200).json(
