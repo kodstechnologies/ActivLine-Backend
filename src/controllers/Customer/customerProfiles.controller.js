@@ -136,6 +136,45 @@ export const getCustomerProfiles = asyncHandler(async (req, res) => {
     profileId,
   });
 
+  // 🔒 Ensure the customer's current active plan is ALWAYS included in the list.
+  // This handles the case where the plan falls outside the current page window
+  // (e.g. limit=20 and the plan is at index 179).
+  const customerCurrentProfileId = normalizeText(
+    customer.profileId || customer.rawPayload?.profile_id || ""
+  );
+  if (
+    !profileResult.isSingle &&
+    !profileId &&
+    customerCurrentProfileId &&
+    Array.isArray(profileResult.items)
+  ) {
+    const alreadyPresent = profileResult.items.some(
+      (entry) =>
+        normalizeText(
+          entry?.Profile?.id || entry?.id || ""
+        ) === customerCurrentProfileId
+    );
+
+    if (!alreadyPresent) {
+      try {
+        // Fetch only this specific profile and prepend it.
+        const currentPlanResult = await (includeDetails
+          ? fetchProfilesWithDetailsByFranchise
+          : fetchProfilesByFranchise)(accountId, {
+          profileId: customerCurrentProfileId,
+        });
+        if (currentPlanResult.isSingle && currentPlanResult.item) {
+          profileResult.items.unshift(currentPlanResult.item);
+          if (profileResult.meta) {
+            profileResult.meta.total = (profileResult.meta.total || 0) + 1;
+          }
+        }
+      } catch {
+        // Non-fatal: proceed without pinning
+      }
+    }
+  }
+
   const customerPaymentQuery = {
     status: "SUCCESS",
     $or: [

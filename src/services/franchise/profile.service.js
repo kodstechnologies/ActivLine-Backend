@@ -104,7 +104,7 @@ export const fetchProfilesByFranchise = async (accountId, options = {}) => {
   }
 
   const page = toPositiveInt(options.page, 1);
-  const limit = Math.min(toPositiveInt(options.limit, 20), 200);
+  const limit = Math.min(toPositiveInt(options.limit, 200), 200);
   const total = filtered.length;
   const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
   const skip = (page - 1) * limit;
