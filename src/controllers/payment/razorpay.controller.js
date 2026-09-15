@@ -165,6 +165,15 @@ const extractPlanPeriodDays = (planDetails = {}) => {
   return null;
 };
 
+const calculateDaysBetween = (startDateIso, endDateIso) => {
+  if (!startDateIso || !endDateIso) return null;
+  const start = new Date(startDateIso);
+  const end = new Date(endDateIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
 const extractAllTextByKeys = (value, keys, bag = new Set()) => {
   if (!value || typeof value !== "object") return bag;
 
@@ -449,7 +458,7 @@ const buildCustomerResolver = async (paymentDocs) => {
 const mapPaymentHistoryDoc = (doc, customer) => {
   const obj = doc.toObject();
   const billingMeta = getBillingMeta(obj.planDetails || {});
-  const periodDays = extractPlanPeriodDays(obj.planDetails || {});
+  let periodDays = extractPlanPeriodDays(obj.planDetails || {});
   const resolvedPlanName = resolvePlanName(obj);
   const resolvedAccountId =
     normalizeText(obj.accountId) || normalizeText(customer?.accountId) || null;
@@ -490,6 +499,10 @@ const mapPaymentHistoryDoc = (doc, customer) => {
           planStartDate.getTime() + Number(periodDays) * 24 * 60 * 60 * 1000,
         )
       : null;
+
+  if (periodDays === null && planStartDate && planEndDate) {
+    periodDays = calculateDaysBetween(planStartDate.toISOString(), planEndDate.toISOString());
+  }
 
   const userName =
     obj.paidByUserName ||
@@ -585,6 +598,10 @@ const buildJazePaymentDoc = (customer) => {
   };
 
   const resolvedCustomer = toCustomerSnapshot(customer);
+  
+  const isoStartDate = toIsoOrNull(startDate);
+  const isoEndDate = toIsoOrNull(endDate);
+  const calculatedPeriodDays = calculateDaysBetween(isoStartDate, isoEndDate);
 
   return {
     paymentId: `jaze_${customer._id}`,
@@ -600,9 +617,9 @@ const buildJazePaymentDoc = (customer) => {
     accountId: customer.accountId || customer.rawPayload?.company_name || null,
     profileId: pId,
     planName: pName,
-    planPeriodDays: null,
-    planStartDate: toIsoOrNull(startDate),
-    planEndDate: toIsoOrNull(endDate),
+    planPeriodDays: calculatedPeriodDays,
+    planStartDate: isoStartDate,
+    planEndDate: isoEndDate,
     paidAt: toIsoOrNull(paidAt),
     createdAt: toIsoOrNull(customer.createdAt),
     updatedAt: toIsoOrNull(customer.updatedAt || customer.createdAt),
@@ -620,9 +637,9 @@ const buildJazePaymentDoc = (customer) => {
       profileId: pId,
       planName: pName,
       planAmount: pAmount,
-      planPeriodDays: null,
-      planStartDate: toIsoOrNull(startDate),
-      planEndDate: toIsoOrNull(endDate),
+      planPeriodDays: calculatedPeriodDays,
+      planStartDate: isoStartDate,
+      planEndDate: isoEndDate,
       billingPlanId: null,
       totalPrice: pAmount,
       details: customer.rawPayload || {},
